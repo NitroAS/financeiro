@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 250 20% 99%;
+  --foreground: 260 16% 12%;
+  --muted: 255 20% 95%;
+  --muted-foreground: 258 8% 40%;
+  --border: 258 24% 90%;
+  --card: 0 0% 100%;
+  --ring: 253 74% 61%;
+
+  --primary: 253 74% 61%;
+  --primary-foreground: 0 0% 100%;
+  --primary-soft: 258 70% 96%;
+
+  --success: 152 68% 32%;
+  --success-soft: 152 55% 94%;
+  --warning: 38 82% 37%;
+  --warning-soft: 42 85% 94%;
+  --critical: 2 56% 55%;
+  --critical-soft: 2 70% 95%;
+}
+
+:root[data-theme='dark'] {
+  --background: 258 16% 8%;
+  --foreground: 258 30% 92%;
+  --muted: 258 14% 14%;
+  --muted-foreground: 258 10% 65%;
+  --border: 258 16% 18%;
+  --card: 258 16% 11%;
+  --ring: 253 88% 78%;
+
+  --primary: 253 88% 78%;
+  --primary-foreground: 258 30% 10%;
+  --primary-soft: 258 24% 16%;
+
+  --success: 152 60% 60%;
+  --success-soft: 152 30% 14%;
+  --warning: 38 74% 60%;
+  --warning-soft: 38 40% 15%;
+  --critical: 2 76% 74%;
+  --critical-soft: 2 40% 16%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: theme('fontFamily.sans');
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: hsl(var(--primary-soft));
+  color: hsl(var(--primary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
