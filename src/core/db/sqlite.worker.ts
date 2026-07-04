@@ -4,6 +4,7 @@ import SQLiteESMFactory from 'wa-sqlite/dist/wa-sqlite.mjs';
 import * as SQLite from 'wa-sqlite';
 import { AccessHandlePoolVFS } from 'wa-sqlite/src/examples/AccessHandlePoolVFS.js';
 import { SCHEMA_SQL } from './generated/schema.sql';
+import { RESPONSAVEIS_PADRAO, CATEGORIAS_PADRAO } from '../../shared/constants/seed-data';
 
 export type ProxyMethod = 'run' | 'all' | 'values' | 'get';
 
@@ -40,6 +41,27 @@ async function init(): Promise<void> {
       const trimmed = statement.trim();
       if (trimmed) await sqlite3.run(db, trimmed);
     }
+    await seedDefaults();
+  }
+}
+
+async function seedDefaults(): Promise<void> {
+  for (const r of RESPONSAVEIS_PADRAO) {
+    await sqlite3.run(db, 'INSERT INTO responsavel (id, nome, cor, icone) VALUES (?, ?, ?, ?)', [
+      r.id,
+      r.nome,
+      r.cor,
+      r.icone,
+    ]);
+  }
+  for (const c of CATEGORIAS_PADRAO) {
+    await sqlite3.run(db, 'INSERT INTO categoria (id, nome, tipo, cor, icone) VALUES (?, ?, ?, ?, ?)', [
+      c.id,
+      c.nome,
+      c.tipo,
+      c.cor,
+      c.icone,
+    ]);
   }
 }
 
