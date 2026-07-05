@@ -1,8 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { CardComponent } from '../../shared/ui/card.component';
 import { BadgeComponent } from '../../shared/ui/badge.component';
 import { DashboardService } from './dashboard.service';
+import { InvestimentosService } from '../investimentos/investimentos.service';
 
 @Component({
   selector: 'app-dashboard',
@@ -12,10 +13,14 @@ import { DashboardService } from './dashboard.service';
     <div class="flex flex-col gap-4">
       <h1 class="text-xl font-semibold tracking-tight">Dashboard</h1>
 
-      <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <app-card>
-          <div class="text-xs text-muted-foreground">Saldo (contas)</div>
+          <div class="text-xs text-muted-foreground">Saldo disponível</div>
           <div class="mt-1 tabular-nums text-lg font-semibold">{{ resumo().saldoContas | number: '1.2-2' }}</div>
+        </app-card>
+        <app-card>
+          <div class="text-xs text-muted-foreground">Patrimônio total</div>
+          <div class="mt-1 tabular-nums text-lg font-semibold">{{ patrimonioTotal() | number: '1.2-2' }}</div>
         </app-card>
         <app-card>
           <div class="text-xs text-muted-foreground">Receitas do mês</div>
@@ -36,6 +41,12 @@ import { DashboardService } from './dashboard.service';
             [class]="resumo().economiaMes >= 0 ? 'text-success' : 'text-critical'"
           >
             {{ resumo().economiaMes | number: '1.2-2' }}
+          </div>
+        </app-card>
+        <app-card>
+          <div class="text-xs text-muted-foreground">Valor investido</div>
+          <div class="mt-1 tabular-nums text-lg font-semibold">
+            {{ investimentosService.patrimonioTotal | number: '1.2-2' }}
           </div>
         </app-card>
       </div>
@@ -96,9 +107,13 @@ import { DashboardService } from './dashboard.service';
 })
 export class DashboardComponent implements OnInit {
   private readonly dashboardService = inject(DashboardService);
+  readonly investimentosService = inject(InvestimentosService);
   readonly resumo = this.dashboardService.resumo;
+
+  readonly patrimonioTotal = computed(() => this.resumo().saldoContas + this.investimentosService.patrimonioTotal);
 
   ngOnInit(): void {
     void this.dashboardService.carregar();
+    void this.investimentosService.carregar();
   }
 }

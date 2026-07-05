@@ -70,6 +70,22 @@ body {
   color: hsl(var(--primary));
 }
 
+@media print {
+  aside,
+  header,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  body {
+    background: white;
+    color: black;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

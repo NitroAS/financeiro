@@ -1,16 +1,19 @@
-import { Component, inject } from '@angular/core';
+import { Component, HostListener, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 
 import { ThemeStore } from '../../core/state/theme.store';
 import { SidebarStore } from '../../core/state/sidebar.store';
 import { DbService } from '../../core/db/db.service';
+import { BuscaStore } from '../../core/state/busca.store';
+import { CommandPaletteComponent } from '../../features/busca/command-palette.component';
+import { BackupService } from '../../core/db/backup.service';
 import { NAV_ITEMS } from './nav-items';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule, CommandPaletteComponent],
   template: `
     <div class="flex h-screen overflow-hidden bg-background text-foreground">
       <aside
@@ -57,6 +60,7 @@ import { NAV_ITEMS } from './nav-items';
         <header class="flex h-14 flex-none items-center justify-between border-b border-border px-6">
           <button
             type="button"
+            (click)="busca.abrir()"
             class="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
           >
             <lucide-angular name="search" [size]="15" />
@@ -76,6 +80,33 @@ import { NAV_ITEMS } from './nav-items';
 
             <button
               type="button"
+              (click)="backupService.exportar()"
+              aria-label="Baixar backup"
+              title="Baixar backup"
+              class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <lucide-angular name="download" [size]="16" />
+            </button>
+
+            <button
+              type="button"
+              (click)="arquivoRestaurar.click()"
+              aria-label="Restaurar backup"
+              title="Restaurar backup"
+              class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <lucide-angular name="upload" [size]="16" />
+            </button>
+            <input
+              #arquivoRestaurar
+              type="file"
+              accept="application/json"
+              class="hidden"
+              (change)="restaurar($event)"
+            />
+
+            <button
+              type="button"
               (click)="theme.toggle()"
               aria-label="Alternar tema"
               class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -89,6 +120,8 @@ import { NAV_ITEMS } from './nav-items';
           <router-outlet />
         </main>
       </div>
+
+      <app-command-palette />
     </div>
   `,
 })
@@ -96,7 +129,32 @@ export class ShellComponent {
   readonly theme = inject(ThemeStore);
   readonly sidebar = inject(SidebarStore);
   readonly dbService = inject(DbService);
+  readonly busca = inject(BuscaStore);
+  readonly backupService = inject(BackupService);
   readonly navItems = NAV_ITEMS;
+
+  async restaurar(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const arquivo = input.files?.[0];
+    if (!arquivo) return;
+    if (confirm('Restaurar este backup vai substituir todos os dados atuais. Continuar?')) {
+      await this.backupService.restaurar(arquivo);
+      window.location.reload();
+    }
+    input.value = '';
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeydown(event: KeyboardEvent): void {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      this.busca.toggle();
+      return;
+    }
+    if (event.key === 'Escape' && this.busca.aberto()) {
+      this.busca.fechar();
+    }
+  }
 
   dbStatusLabel(): string {
     if (this.dbService.error()) return 'Banco indisponível';

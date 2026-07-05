@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { and, desc, eq, gte, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, lt } from 'drizzle-orm';
 import { DbService } from '../../core/db/db.service';
 import { lancamento } from '../../core/db/schema';
 import { gerarParcelas, type NovoParcelamento } from '../../shared/utils/parcelamento';
@@ -26,6 +26,7 @@ export class LancamentosService {
   private readonly dbService = inject(DbService);
 
   readonly lancamentos = signal<Lancamento[]>([]);
+  readonly lixeira = signal<Lancamento[]>([]);
   readonly mesReferencia = signal<{ mes: number; ano: number }>(mesAtual());
 
   async carregar(): Promise<void> {
@@ -93,6 +94,46 @@ export class LancamentosService {
   async remover(id: string): Promise<void> {
     await this.dbService.db.update(lancamento).set({ deletedAt: new Date().toISOString() }).where(eq(lancamento.id, id));
     await this.carregar();
+  }
+
+  async favoritar(id: string, favorito: boolean): Promise<void> {
+    await this.dbService.db.update(lancamento).set({ favorito }).where(eq(lancamento.id, id));
+    await this.carregar();
+  }
+
+  async duplicar(id: string): Promise<void> {
+    const [original] = await this.dbService.db.select().from(lancamento).where(eq(lancamento.id, id));
+    if (!original) return;
+    const { id: _id, criadoEm: _criadoEm, atualizadoEm: _atualizadoEm, ...resto } = original;
+    await this.dbService.db.insert(lancamento).values({
+      ...resto,
+      status: 'pendente',
+      dataPagamento: undefined,
+      grupoParcelamentoId: undefined,
+      parcelaAtual: undefined,
+      parcelaTotal: undefined,
+    });
+    await this.carregar();
+  }
+
+  async carregarLixeira(): Promise<void> {
+    const rows = await this.dbService.db
+      .select()
+      .from(lancamento)
+      .where(isNotNull(lancamento.deletedAt))
+      .orderBy(desc(lancamento.deletedAt));
+    this.lixeira.set(rows);
+  }
+
+  async restaurar(id: string): Promise<void> {
+    await this.dbService.db.update(lancamento).set({ deletedAt: null }).where(eq(lancamento.id, id));
+    await this.carregarLixeira();
+    await this.carregar();
+  }
+
+  async excluirDefinitivamente(id: string): Promise<void> {
+    await this.dbService.db.delete(lancamento).where(eq(lancamento.id, id));
+    await this.carregarLixeira();
   }
 }
 

@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -14,7 +14,7 @@ import { RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
 import { ContasService } from '../contas/contas.service';
 import { CategoriasService } from '../categorias/categorias.service';
 import { CartoesService } from '../cartoes/cartoes.service';
-import { LancamentosService } from './lancamentos.service';
+import { LancamentosService, type Lancamento } from './lancamentos.service';
 
 const lancamentoSchema = z.object({
   tipo: z.enum(['receita', 'despesa']),
@@ -65,8 +65,36 @@ function parseDataLocal(iso: string): Date {
           <button appButton variant="ghost" size="icon" type="button" (click)="proximoMes()" aria-label="Próximo mês">
             <lucide-angular name="chevron-right" [size]="16" />
           </button>
+          <button appButton variant="outline" size="sm" type="button" class="ml-2" (click)="alternarLixeira()">
+            <lucide-angular name="trash-2" [size]="14" />
+            Lixeira
+          </button>
         </div>
       </div>
+
+      @if (mostrarLixeira()) {
+        <app-card>
+          <h2 class="mb-2 text-sm font-semibold">Lixeira</h2>
+          <div class="flex flex-col gap-1.5">
+            @for (l of lancamentosService.lixeira(); track l.id) {
+              <div class="flex items-center justify-between text-sm">
+                <span class="truncate text-muted-foreground line-through">{{ l.descricao }}</span>
+                <div class="flex items-center gap-2">
+                  <span class="tabular-nums text-muted-foreground">{{ l.valor | number: '1.2-2' }}</span>
+                  <button appButton variant="ghost" size="icon" type="button" (click)="restaurar(l.id)" aria-label="Restaurar">
+                    <lucide-angular name="rotate-ccw" [size]="14" />
+                  </button>
+                  <button appButton variant="ghost" size="icon" type="button" (click)="excluirDefinitivamente(l.id)" aria-label="Excluir definitivamente">
+                    <lucide-angular name="x" [size]="14" />
+                  </button>
+                </div>
+              </div>
+            } @empty {
+              <p class="text-sm text-muted-foreground">A lixeira está vazia.</p>
+            }
+          </div>
+        </app-card>
+      }
 
       <app-card>
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-col gap-3">
@@ -188,6 +216,19 @@ function parseDataLocal(iso: string): Date {
                   <lucide-angular name="check" [size]="15" />
                 </button>
               }
+              <button
+                appButton
+                variant="ghost"
+                size="icon"
+                type="button"
+                (click)="favoritar(l)"
+                [attr.aria-label]="l.favorito ? 'Remover dos favoritos' : 'Favoritar'"
+              >
+                <lucide-angular name="star" [size]="15" [class]="l.favorito ? 'text-warning' : ''" />
+              </button>
+              <button appButton variant="ghost" size="icon" type="button" (click)="duplicar(l.id)" aria-label="Duplicar">
+                <lucide-angular name="copy" [size]="15" />
+              </button>
               <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
@@ -282,5 +323,30 @@ export class LancamentosComponent implements OnInit {
 
   async remover(id: string): Promise<void> {
     await this.lancamentosService.remover(id);
+  }
+
+  async favoritar(l: Lancamento): Promise<void> {
+    await this.lancamentosService.favoritar(l.id, !l.favorito);
+  }
+
+  async duplicar(id: string): Promise<void> {
+    await this.lancamentosService.duplicar(id);
+  }
+
+  readonly mostrarLixeira = signal(false);
+
+  alternarLixeira(): void {
+    this.mostrarLixeira.update((v) => !v);
+    if (this.mostrarLixeira()) void this.lancamentosService.carregarLixeira();
+  }
+
+  async restaurar(id: string): Promise<void> {
+    await this.lancamentosService.restaurar(id);
+  }
+
+  async excluirDefinitivamente(id: string): Promise<void> {
+    if (confirm('Excluir definitivamente? Essa ação não pode ser desfeita.')) {
+      await this.lancamentosService.excluirDefinitivamente(id);
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { ApplicationConfig, importProvidersFrom, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, importProvidersFrom, provideZoneChangeDetection, isDevMode } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import {
   LucideAngularModule,
@@ -40,9 +40,15 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Upload,
+  Star,
+  Copy,
+  RotateCcw,
 } from 'lucide-angular';
 
 import { routes } from './app.routes';
+import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -88,7 +94,15 @@ export const appConfig: ApplicationConfig = {
         Check,
         ChevronLeft,
         ChevronRight,
+        Download,
+        Upload,
+        Star,
+        Copy,
+        RotateCcw,
       }),
-    ),
+    ), provideServiceWorker('ngsw-worker.js', {
+            enabled: !isDevMode(),
+            registrationStrategy: 'registerWhenStable:30000'
+          }),
   ],
 };

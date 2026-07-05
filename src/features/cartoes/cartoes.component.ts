@@ -12,6 +12,8 @@ import { zodValidator } from '../../shared/utils/zod-validator';
 import { CARTAO_BANDEIRAS } from '../../shared/constants/seed-data';
 import { ContasService } from '../contas/contas.service';
 import { CartoesService } from './cartoes.service';
+import { LancamentosService } from '../lancamentos/lancamentos.service';
+import { ProgressComponent } from '../../shared/ui/progress.component';
 
 const cartaoSchema = z.object({
   nome: z.string().min(1, 'Informe um nome'),
@@ -39,6 +41,7 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
     ButtonDirective,
     InputDirective,
     SelectDirective,
+    ProgressComponent,
   ],
   template: `
     <div class="flex flex-col gap-4">
@@ -106,14 +109,47 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
               </button>
             </div>
             <div class="text-xs text-muted-foreground">{{ c.banco }} · {{ c.bandeira }}</div>
-            <div class="flex items-center justify-between text-xs">
-              <span class="text-muted-foreground">Limite</span>
-              <span class="tabular-nums font-medium">{{ c.limite | number: '1.2-2' }}</span>
-            </div>
-            <div class="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Fecha dia {{ c.diaFechamento }}</span>
-              <span>Vence dia {{ c.diaVencimento }}</span>
-            </div>
+
+            @if (cartoesService.resumos()[c.id]; as resumo) {
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-muted-foreground">Usado {{ resumo.usado | number: '1.2-2' }}</span>
+                  <span class="text-muted-foreground">Disponível {{ resumo.disponivel | number: '1.2-2' }}</span>
+                </div>
+                <app-progress [value]="resumo.usado" [max]="c.limite" />
+              </div>
+
+              <div class="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Fecha dia {{ c.diaFechamento }}</span>
+                <span>Vence dia {{ c.diaVencimento }}</span>
+              </div>
+
+              <div class="flex items-center justify-between rounded-md bg-muted px-2.5 py-1.5 text-xs">
+                <span>Próxima fatura ({{ resumo.vencimento.toLocaleDateString('pt-BR') }})</span>
+                <span class="tabular-nums font-semibold">{{ resumo.valorFaturaAberta | number: '1.2-2' }}</span>
+              </div>
+
+              @if (resumo.lancamentosFaturaAberta.length) {
+                <div class="flex flex-col gap-1.5 border-t border-border pt-2">
+                  @for (l of resumo.lancamentosFaturaAberta; track l.id) {
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="truncate">
+                        {{ l.descricao }}
+                        @if (l.parcelaTotal) {
+                          <span class="text-muted-foreground">{{ l.parcelaAtual }}/{{ l.parcelaTotal }}</span>
+                        }
+                      </span>
+                      <div class="flex items-center gap-2">
+                        <span class="tabular-nums">{{ l.valor | number: '1.2-2' }}</span>
+                        <button appButton variant="ghost" size="icon" type="button" (click)="quitar(l.id)" aria-label="Quitar parcela">
+                          <lucide-angular name="check" [size]="13" />
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            }
           </app-card>
         } @empty {
           <app-card class="text-sm text-muted-foreground">Nenhum cartão cadastrado ainda.</app-card>
@@ -126,6 +162,7 @@ export class CartoesComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   readonly cartoesService = inject(CartoesService);
   readonly contasService = inject(ContasService);
+  private readonly lancamentosService = inject(LancamentosService);
   readonly bandeiras = CARTAO_BANDEIRAS;
 
   readonly form = this.fb.nonNullable.group(
@@ -170,5 +207,10 @@ export class CartoesComponent implements OnInit {
 
   async remover(id: string): Promise<void> {
     await this.cartoesService.remover(id);
+  }
+
+  async quitar(lancamentoId: string): Promise<void> {
+    await this.lancamentosService.marcarPago(lancamentoId);
+    await this.cartoesService.carregar();
   }
 }
