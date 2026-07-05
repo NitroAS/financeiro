@@ -1,14 +1,19 @@
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { categoria } from './categoria';
+import { defineTable } from './table';
 
-export const orcamento = sqliteTable('orcamento', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  categoriaId: text('categoria_id')
-    .notNull()
-    .references(() => categoria.id),
-  mes: integer('mes').notNull(),
-  ano: integer('ano').notNull(),
-  valorPlanejado: real('valor_planejado').notNull(),
+export interface Orcamento {
+  id: string;
+  categoriaId: string;
+  mes: number;
+  ano: number;
+  valorPlanejado: number;
+}
+
+export type NovoOrcamento = Partial<Pick<Orcamento, 'id'>> & Pick<Orcamento, 'categoriaId' | 'mes' | 'ano' | 'valorPlanejado'>;
+
+export const orcamento = defineTable<Orcamento, NovoOrcamento>('orcamento', {
+  id: 'id',
+  categoriaId: 'categoria_id',
+  mes: 'mes',
+  ano: 'ano',
+  valorPlanejado: 'valor_planejado',
 });

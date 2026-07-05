@@ -1,3 +1,4 @@
+export * from './table';
 export * from './responsavel';
 export * from './conta';
 export * from './cartao';

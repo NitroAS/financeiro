@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { and, isNull, or, like } from 'drizzle-orm';
+import { and, isNull, or, like } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { lancamento } from '../../core/db/schema';
 import type { Lancamento } from '../lancamentos/lancamentos.service';

@@ -1,14 +1,19 @@
-import { blob, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { lancamento } from './lancamento';
+import { defineTable } from './table';
 
-export const anexo = sqliteTable('anexo', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  lancamentoId: text('lancamento_id')
-    .notNull()
-    .references(() => lancamento.id),
-  nomeArquivo: text('nome_arquivo').notNull(),
-  mime: text('mime').notNull(),
-  conteudo: blob('conteudo', { mode: 'buffer' }).notNull(),
+export interface Anexo {
+  id: string;
+  lancamentoId: string;
+  nomeArquivo: string;
+  mime: string;
+  conteudo: string;
+}
+
+export type NovoAnexo = Partial<Pick<Anexo, 'id'>> & Pick<Anexo, 'lancamentoId' | 'nomeArquivo' | 'mime' | 'conteudo'>;
+
+export const anexo = defineTable<Anexo, NovoAnexo>('anexo', {
+  id: 'id',
+  lancamentoId: 'lancamento_id',
+  nomeArquivo: 'nome_arquivo',
+  mime: 'mime',
+  conteudo: 'conteudo',
 });

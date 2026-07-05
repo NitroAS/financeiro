@@ -1,16 +1,28 @@
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { responsavel } from './responsavel';
+import { defineTable } from './table';
 
-export const conta = sqliteTable('conta', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  nome: text('nome').notNull(),
-  tipo: text('tipo', { enum: ['corrente', 'carteira', 'dinheiro', 'investimento'] }).notNull(),
-  instituicao: text('instituicao'),
-  saldoInicial: real('saldo_inicial').notNull().default(0),
-  cor: text('cor').notNull(),
-  icone: text('icone').notNull(),
-  responsavelId: text('responsavel_id').references(() => responsavel.id),
-  arquivada: integer('arquivada', { mode: 'boolean' }).notNull().default(false),
+export interface Conta {
+  id: string;
+  nome: string;
+  tipo: 'corrente' | 'carteira' | 'dinheiro' | 'investimento';
+  instituicao: string | null;
+  saldoInicial: number;
+  cor: string;
+  icone: string;
+  responsavelId: string | null;
+  arquivada: boolean;
+}
+
+export type NovaConta = Partial<Pick<Conta, 'id' | 'instituicao' | 'responsavelId' | 'arquivada' | 'saldoInicial'>> &
+  Pick<Conta, 'nome' | 'tipo' | 'cor' | 'icone'>;
+
+export const conta = defineTable<Conta, NovaConta>('conta', {
+  id: 'id',
+  nome: 'nome',
+  tipo: 'tipo',
+  instituicao: 'instituicao',
+  saldoInicial: 'saldo_inicial',
+  cor: 'cor',
+  icone: 'icone',
+  responsavelId: 'responsavel_id',
+  arquivada: 'arquivada',
 });

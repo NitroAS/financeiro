@@ -47,6 +47,7 @@ import {
   RotateCcw,
   Menu,
   FileSpreadsheet,
+  LogOut,
 } from 'lucide-angular';
 
 import { routes } from './app.routes';
@@ -103,6 +104,7 @@ export const appConfig: ApplicationConfig = {
         RotateCcw,
         Menu,
         FileSpreadsheet,
+        LogOut,
       }),
     ), provideServiceWorker('ngsw-worker.js', {
             enabled: !isDevMode(),

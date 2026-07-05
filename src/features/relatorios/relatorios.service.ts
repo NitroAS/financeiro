@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { and, eq, gte, isNull, lt } from 'drizzle-orm';
+import { and, eq, gte, isNull, lt } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { categoria, lancamento } from '../../core/db/schema';
 import { RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';

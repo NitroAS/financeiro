@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { and, desc, eq, gte, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lt } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { conta, lancamento } from '../../core/db/schema';
 import { RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
@@ -40,6 +40,11 @@ export class DashboardService {
   private readonly dbService = inject(DbService);
 
   readonly resumo = signal<ResumoDashboard>(RESUMO_VAZIO);
+
+  constructor() {
+    this.dbService.db.subscribeTable(lancamento, () => void this.carregar());
+    this.dbService.db.subscribeTable(conta, () => void this.carregar());
+  }
 
   async carregar(): Promise<void> {
     const db = this.dbService.db;

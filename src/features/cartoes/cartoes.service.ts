@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { cartao, lancamento } from '../../core/db/schema';
 import { cicloFaturaAberto } from '../../shared/utils/fatura';
@@ -22,6 +22,11 @@ export class CartoesService {
 
   readonly cartoes = signal<Cartao[]>([]);
   readonly resumos = signal<Record<string, ResumoCartao>>({});
+
+  constructor() {
+    this.dbService.db.subscribeTable(cartao, () => void this.carregar());
+    this.dbService.db.subscribeTable(lancamento, () => void this.carregar());
+  }
 
   async carregar(): Promise<void> {
     const rows = await this.dbService.db.select().from(cartao).orderBy(cartao.nome);

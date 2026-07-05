@@ -1,26 +1,23 @@
-import * as Comlink from 'comlink';
-import { drizzle } from 'drizzle-orm/sqlite-proxy';
-import * as schema from './schema';
-import type { SqliteWorkerApi } from './sqlite.worker';
+import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../config/runtime-config.generated';
+import { SupabaseDb } from './query-builder';
 
-let workerApi: Comlink.Remote<SqliteWorkerApi> | undefined;
-let readyPromise: Promise<void> | undefined;
+export const supabaseConfigurado = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-function getWorkerApi(): Comlink.Remote<SqliteWorkerApi> {
-  if (!workerApi) {
-    const worker = new Worker(new URL('./sqlite.worker', import.meta.url), { type: 'module' });
-    workerApi = Comlink.wrap<SqliteWorkerApi>(worker);
-  }
-  return workerApi;
-}
+export const supabase = supabaseConfigurado
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } })
+  : null;
 
-/** Garante que o worker terminou de abrir/migrar o banco antes da primeira query. */
-export function ready(): Promise<void> {
-  readyPromise ??= getWorkerApi().init();
-  return readyPromise;
-}
-
-export const db = drizzle(async (sql, params, method) => {
-  await ready();
-  return getWorkerApi().query(sql, params, method);
-}, { schema });
+export const db = new SupabaseDb(
+  supabase ??
+    // Cliente "fantasma": só existe pra o app não quebrar ao importar antes de configurar o
+    // Supabase — qualquer chamada real cai no erro tratado por DbService.error().
+    (new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('Supabase não configurado: defina SUPABASE_URL e SUPABASE_ANON_KEY.');
+        },
+      },
+    ) as never),
+);

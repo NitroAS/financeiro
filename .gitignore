@@ -40,6 +40,11 @@ testem.log
 # Gerado via `npm run postinstall` a partir de node_modules/wa-sqlite
 /public/wa-sqlite/
 
+# Gerado em build-time a partir das variáveis de ambiente SUPABASE_URL/SUPABASE_ANON_KEY
+/src/core/config/runtime-config.generated.ts
+.env
+.env.local
+
 # System files
 .DS_Store
 Thumbs.db

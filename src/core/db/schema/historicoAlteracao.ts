@@ -1,17 +1,22 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { lancamento } from './lancamento';
+import { defineTable } from './table';
 
-export const historicoAlteracao = sqliteTable('historico_alteracao', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  lancamentoId: text('lancamento_id')
-    .notNull()
-    .references(() => lancamento.id),
-  campo: text('campo').notNull(),
-  valorAntigo: text('valor_antigo'),
-  valorNovo: text('valor_novo'),
-  alteradoEm: text('alterado_em')
-    .notNull()
-    .$defaultFn(() => new Date().toISOString()),
+export interface HistoricoAlteracao {
+  id: string;
+  lancamentoId: string;
+  campo: string;
+  valorAntigo: string | null;
+  valorNovo: string | null;
+  alteradoEm: string;
+}
+
+export type NovoHistoricoAlteracao = Partial<Pick<HistoricoAlteracao, 'id' | 'valorAntigo' | 'valorNovo' | 'alteradoEm'>> &
+  Pick<HistoricoAlteracao, 'lancamentoId' | 'campo'>;
+
+export const historicoAlteracao = defineTable<HistoricoAlteracao, NovoHistoricoAlteracao>('historico_alteracao', {
+  id: 'id',
+  lancamentoId: 'lancamento_id',
+  campo: 'campo',
+  valorAntigo: 'valor_antigo',
+  valorNovo: 'valor_novo',
+  alteradoEm: 'alterado_em',
 });

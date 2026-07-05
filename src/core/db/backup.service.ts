@@ -52,8 +52,9 @@ export class BackupService {
     URL.revokeObjectURL(url);
   }
 
-  /** Restaura um backup: apaga tudo e reinsere os dados do arquivo (chaves estrangeiras não são
-   * verificadas por padrão no SQLite, então a ordem de inserção não é um problema aqui). */
+  /** Restaura um backup: apaga tudo e reinsere os dados do arquivo. A ordem de TABELAS já é
+   * "pais antes de filhos" (ex.: conta antes de lancamento) — respeita as chaves estrangeiras
+   * do Postgres tanto ao apagar (filhos primeiro, por isso o .reverse()) quanto ao reinserir. */
   async restaurar(arquivo: File): Promise<void> {
     const conteudo = JSON.parse(await arquivo.text()) as ArquivoBackup;
     const db = this.dbService.db;

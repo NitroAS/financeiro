@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { eq } from 'drizzle-orm';
+import { eq } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { investimento, investimentoMovimento } from '../../core/db/schema';
 
@@ -18,6 +18,11 @@ export class InvestimentosService {
   private readonly dbService = inject(DbService);
 
   readonly investimentos = signal<InvestimentoComSaldo[]>([]);
+
+  constructor() {
+    this.dbService.db.subscribeTable(investimento, () => void this.carregar());
+    this.dbService.db.subscribeTable(investimentoMovimento, () => void this.carregar());
+  }
 
   get patrimonioTotal(): number {
     return this.investimentos().reduce((acc, i) => acc + i.saldo, 0);

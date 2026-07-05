@@ -10,6 +10,7 @@ import { BuscaStore } from '../../core/state/busca.store';
 import { CommandPaletteComponent } from '../../features/busca/command-palette.component';
 import { BackupService } from '../../core/db/backup.service';
 import { ImportarPlanilhaComponent } from '../../features/importacao/importar-planilha.component';
+import { AuthService } from '../../core/auth/auth.service';
 import { NAV_ITEMS } from './nav-items';
 
 @Component({
@@ -139,6 +140,16 @@ import { NAV_ITEMS } from './nav-items';
             >
               <lucide-angular [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="17" />
             </button>
+
+            <button
+              type="button"
+              (click)="auth.sair()"
+              aria-label="Sair"
+              title="Sair"
+              class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <lucide-angular name="log-out" [size]="16" />
+            </button>
           </div>
         </header>
 
@@ -157,6 +168,7 @@ export class ShellComponent {
   readonly dbService = inject(DbService);
   readonly busca = inject(BuscaStore);
   readonly backupService = inject(BackupService);
+  readonly auth = inject(AuthService);
   readonly navItems = NAV_ITEMS;
   readonly menuAberto = signal(false);
 

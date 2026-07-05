@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { eq } from 'drizzle-orm';
+import { eq } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { conta } from '../../core/db/schema';
 
@@ -12,6 +12,10 @@ export class ContasService {
 
   readonly contas = signal<Conta[]>([]);
   readonly carregando = signal(false);
+
+  constructor() {
+    this.dbService.db.subscribeTable(conta, () => void this.carregar());
+  }
 
   async carregar(): Promise<void> {
     this.carregando.set(true);

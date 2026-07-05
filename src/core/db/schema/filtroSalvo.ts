@@ -1,10 +1,17 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { defineTable } from './table';
 
-export const filtroSalvo = sqliteTable('filtro_salvo', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  nome: text('nome').notNull(),
-  escopo: text('escopo').notNull(),
-  parametrosJson: text('parametros_json').notNull(),
+export interface FiltroSalvo {
+  id: string;
+  nome: string;
+  escopo: string;
+  parametrosJson: string;
+}
+
+export type NovoFiltroSalvo = Partial<Pick<FiltroSalvo, 'id'>> & Pick<FiltroSalvo, 'nome' | 'escopo' | 'parametrosJson'>;
+
+export const filtroSalvo = defineTable<FiltroSalvo, NovoFiltroSalvo>('filtro_salvo', {
+  id: 'id',
+  nome: 'nome',
+  escopo: 'escopo',
+  parametrosJson: 'parametros_json',
 });

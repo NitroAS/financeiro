@@ -1,12 +1,22 @@
-import { type AnySQLiteColumn, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { defineTable } from './table';
 
-export const categoria = sqliteTable('categoria', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  nome: text('nome').notNull(),
-  tipo: text('tipo', { enum: ['receita', 'despesa'] }).notNull(),
-  cor: text('cor').notNull(),
-  icone: text('icone').notNull(),
-  categoriaPaiId: text('categoria_pai_id').references((): AnySQLiteColumn => categoria.id),
+export interface Categoria {
+  id: string;
+  nome: string;
+  tipo: 'receita' | 'despesa';
+  cor: string;
+  icone: string;
+  categoriaPaiId: string | null;
+}
+
+export type NovaCategoria = Partial<Pick<Categoria, 'id' | 'categoriaPaiId'>> &
+  Pick<Categoria, 'nome' | 'tipo' | 'cor' | 'icone'>;
+
+export const categoria = defineTable<Categoria, NovaCategoria>('categoria', {
+  id: 'id',
+  nome: 'nome',
+  tipo: 'tipo',
+  cor: 'cor',
+  icone: 'icone',
+  categoriaPaiId: 'categoria_pai_id',
 });

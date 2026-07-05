@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { and, desc, eq, gte, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, lt } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { lancamento, recorrencia } from '../../core/db/schema';
 import { addMonthsClamped, gerarParcelas, type NovoParcelamento } from '../../shared/utils/parcelamento';
@@ -56,6 +56,10 @@ export class LancamentosService {
   readonly mesReferencia = signal<{ mes: number; ano: number }>(mesAtual());
   readonly filtroResponsavelId = signal<string>('');
   readonly destacarId = signal<string | null>(null);
+
+  constructor() {
+    this.dbService.db.subscribeTable(lancamento, () => void this.carregar());
+  }
 
   async carregar(): Promise<void> {
     const { mes, ano } = this.mesReferencia();

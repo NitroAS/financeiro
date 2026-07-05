@@ -1,15 +1,26 @@
-import { real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { conta } from './conta';
+import { defineTable } from './table';
 
-export const meta = sqliteTable('meta', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  nome: text('nome').notNull(),
-  valorAlvo: real('valor_alvo').notNull(),
-  valorAtual: real('valor_atual').notNull().default(0),
-  dataAlvo: text('data_alvo'),
-  cor: text('cor').notNull(),
-  icone: text('icone').notNull(),
-  contaVinculadaId: text('conta_vinculada_id').references(() => conta.id),
+export interface Meta {
+  id: string;
+  nome: string;
+  valorAlvo: number;
+  valorAtual: number;
+  dataAlvo: string | null;
+  cor: string;
+  icone: string;
+  contaVinculadaId: string | null;
+}
+
+export type NovaMeta = Partial<Pick<Meta, 'id' | 'valorAtual' | 'dataAlvo' | 'contaVinculadaId'>> &
+  Pick<Meta, 'nome' | 'valorAlvo' | 'cor' | 'icone'>;
+
+export const meta = defineTable<Meta, NovaMeta>('meta', {
+  id: 'id',
+  nome: 'nome',
+  valorAlvo: 'valor_alvo',
+  valorAtual: 'valor_atual',
+  dataAlvo: 'data_alvo',
+  cor: 'cor',
+  icone: 'icone',
+  contaVinculadaId: 'conta_vinculada_id',
 });

@@ -1,6 +1,7 @@
 # Financeiro
 
-Controle financeiro pessoal — Angular + SQLite (WASM/OPFS) + Drizzle ORM, 100% local e offline.
+Controle financeiro pessoal — Angular + Supabase (Postgres), sincronizado em quase tempo real entre
+todos os aparelhos da família, atrás de um login único compartilhado.
 
 Contexto completo (arquitetura, modelagem de dados, wireframes, cronograma): ver o blueprint aprovado no início do projeto.
 
@@ -8,31 +9,43 @@ Contexto completo (arquitetura, modelagem de dados, wireframes, cronograma): ver
 
 - Angular 18 (standalone components) + TypeScript
 - TailwindCSS + primitivos próprios (`shared/ui`) no espírito shadcn/spartan
-- SQLite via `wa-sqlite` (WASM) + OPFS, rodando num Web Worker — banco real, arquivo único, 100% offline
-- Drizzle ORM (`drizzle-orm/sqlite-proxy`) como camada de tipagem/queries sobre o worker
+- Supabase (Postgres + Auth + Realtime) como banco compartilhado entre aparelhos
+- Camada própria de query-builder (`src/core/db/query-builder.ts`) que imita a API do Drizzle
+  (`eq/and/or/gte/lt/...`) mas fala com o Supabase via `@supabase/supabase-js` — o app inteiro lê e
+  escreve em camelCase, a tradução para as colunas em snake_case do Postgres é automática
 - lucide-angular para ícones
+
+## Configuração (Supabase)
+
+O app não funciona sem um projeto Supabase configurado. Passo a passo completo em
+[`docs/supabase-setup.md`](docs/supabase-setup.md); resumo:
+
+1. Crie um projeto grátis em [supabase.com](https://supabase.com).
+2. Rode `supabase/schema.sql` inteiro no SQL Editor do projeto (cria as tabelas, ativa
+   segurança por linha e tempo real, e semeia os responsáveis/categorias padrão).
+3. Em **Authentication → Users**, crie um único usuário (e-mail + senha) compartilhado pela
+   família — é o login que todo mundo vai usar.
+4. Em **Project Settings → API**, copie a **Project URL** e a **anon public key**.
+5. Defina como variáveis de ambiente `SUPABASE_URL` e `SUPABASE_ANON_KEY` (num arquivo `.env` na
+   raiz para rodar local, ou nas envs do projeto na Vercel para produção).
+
+Sem isso, o app mostra uma tela de "Supabase não configurado" em vez de quebrar.
 
 ## Desenvolvimento
 
 ```bash
-npm install       # instala deps e copia o wa-sqlite.wasm para public/ (postinstall)
-npm start         # ng serve — http://localhost:4200
-npm run build     # build de produção
+npm install       # instala deps (também gera um runtime-config.generated.ts vazio)
+npm start         # gera o runtime-config a partir do .env e roda ng serve — http://localhost:4200
+npm run build     # idem, para build de produção
 npm test          # testes unitários (Karma + ChromeHeadlessNoSandbox)
 ```
 
 ## Banco de dados
 
-O schema fica em `src/core/db/schema/*.ts` (Drizzle). Depois de alterar o schema:
-
-```bash
-npm run db:generate
-```
-
-Isso roda o `drizzle-kit generate` (gera a migration SQL em `src/core/db/migrations/`) e concatena
-o resultado em `src/core/db/generated/schema.sql.ts`, que o worker (`sqlite.worker.ts`) importa
-diretamente para bootstrapar o banco na primeira execução — sem fetch em runtime, sem depender de
-path de assets.
+O schema (TypeScript, só descreve nomes de tabela/coluna — sem conexão real) fica em
+`src/core/db/schema/*.ts`. O schema de verdade (DDL do Postgres) fica em `supabase/schema.sql` —
+ao adicionar uma tabela/coluna nova, edite os dois: o `.ts` (pro app saber o nome da coluna) e o
+`.sql` (pra criar de fato no Supabase; pode rodar de novo com segurança, é idempotente).
 
 ## Importar uma planilha existente
 
@@ -62,17 +75,22 @@ Depois, abra o app → ícone de upload (restaurar backup) no topo → selecione
 Os dois ícones ao lado do alternador de tema exportam/restauram um JSON com todas as tabelas do
 banco — útil como backup manual ou para migrar de aparelho.
 
-## PWA
+## PWA e offline
 
-`ng add @angular/pwa` já está configurado (`ngsw-config.json`, `manifest.webmanifest`, ícones).
-Em produção (`npm run build`), o app é instalável e funciona offline após a primeira visita.
+`ng add @angular/pwa` já está configurado (`ngsw-config.json`, `manifest.webmanifest`, ícones) —
+o app é instalável no celular/desktop. O que já funciona offline: o app abre (assets em cache) e
+as telas continuam mostrando os últimos dados carregados. **Ainda não implementado**: uma fila que
+guarde alterações feitas offline e reenvie ao reconectar — hoje, sem internet, uma tentativa de
+salvar simplesmente falha (o Supabase é acessado via HTTP, não tem cópia local do banco). Isso é
+uma simplificação consciente dado o tamanho da migração para Supabase; se for importante ter
+gravação 100% offline, é um próximo passo a implementar.
 
 ## Estrutura
 
 ```
 src/
 ├── app/         # bootstrap, rotas, shell (sidebar + topbar + busca global)
-├── core/        # banco de dados (schema, worker, client, backup) e estado global (tema, sidebar, busca)
+├── core/        # auth (login compartilhado), banco (schema, client, query-builder, backup), estado global
 ├── features/    # um módulo por domínio financeiro (dashboard, lançamentos, cartões, metas...)
 ├── shared/      # UI, utilitários de domínio (parcelamento, recorrência, fatura, exportação)
 └── scripts/     # importação da planilha real (Controle_Mensal_Financeiro.xlsx)

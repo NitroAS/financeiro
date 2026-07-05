@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { and, gte, isNull, lt } from 'drizzle-orm';
+import { and, gte, isNull, lt } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { lancamento } from '../../core/db/schema';
 import type { Lancamento } from '../lancamentos/lancamentos.service';
@@ -18,6 +18,10 @@ export class CalendarioService {
 
   readonly mesReferencia = signal<{ mes: number; ano: number }>(mesAtual());
   readonly dias = signal<DiaCalendario[]>([]);
+
+  constructor() {
+    this.dbService.db.subscribeTable(lancamento, () => void this.carregar());
+  }
 
   async carregar(): Promise<void> {
     const { mes, ano } = this.mesReferencia();

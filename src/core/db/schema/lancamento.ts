@@ -1,45 +1,87 @@
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { conta } from './conta';
-import { cartao } from './cartao';
-import { categoria } from './categoria';
-import { responsavel } from './responsavel';
-import { recorrencia } from './recorrencia';
+import { defineTable } from './table';
 
 /**
  * Parcelamentos são materializados por completo na criação: cadastrar uma compra em
  * N vezes gera as N linhas aqui (mesmo grupoParcelamentoId), cada uma já com o mês
  * correto — por isso o mês seguinte sempre mostra a parcela certa (ex.: 1/10 em
  * Janeiro já existe como 2/10 em Fevereiro) sem nenhum cálculo em tempo de leitura.
- * Recorrências (contas fixas indefinidas) não são materializadas com antecedência:
- * são projetadas sob demanda (ver shared/utils/recorrencia.ts) e só viram uma linha
- * real aqui quando o mês projetado é visualizado ou a ocorrência é paga.
+ * Recorrências mensais (salário, aluguel...) também são materializadas com antecedência
+ * (ver LancamentosService.criarRecorrente), todas ligadas pelo mesmo recorrenciaId.
  */
-export const lancamento = sqliteTable('lancamento', {
-  id: text('id')
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  tipo: text('tipo', { enum: ['receita', 'despesa'] }).notNull(),
-  descricao: text('descricao').notNull(),
-  valor: real('valor').notNull(),
-  data: text('data').notNull(),
-  vencimento: text('vencimento'),
-  dataPagamento: text('data_pagamento'),
-  status: text('status', { enum: ['pendente', 'pago', 'atrasado'] })
-    .notNull()
-    .default('pendente'),
-  contaId: text('conta_id').references(() => conta.id),
-  cartaoId: text('cartao_id').references(() => cartao.id),
-  categoriaId: text('categoria_id').references(() => categoria.id),
-  responsavelId: text('responsavel_id').references(() => responsavel.id),
-  formaPagamento: text('forma_pagamento'),
-  observacao: text('observacao'),
-  favorito: integer('favorito', { mode: 'boolean' }).notNull().default(false),
-  deletedAt: text('deleted_at'),
-  grupoParcelamentoId: text('grupo_parcelamento_id'),
-  parcelaAtual: integer('parcela_atual'),
-  parcelaTotal: integer('parcela_total'),
-  recorrenciaId: text('recorrencia_id').references(() => recorrencia.id),
-  origemImportacao: text('origem_importacao'),
-  criadoEm: text('criado_em').$defaultFn(() => new Date().toISOString()),
-  atualizadoEm: text('atualizado_em'),
+export interface Lancamento {
+  id: string;
+  tipo: 'receita' | 'despesa';
+  descricao: string;
+  valor: number;
+  data: string;
+  vencimento: string | null;
+  dataPagamento: string | null;
+  status: 'pendente' | 'pago' | 'atrasado';
+  contaId: string | null;
+  cartaoId: string | null;
+  categoriaId: string | null;
+  responsavelId: string | null;
+  formaPagamento: string | null;
+  observacao: string | null;
+  favorito: boolean;
+  deletedAt: string | null;
+  grupoParcelamentoId: string | null;
+  parcelaAtual: number | null;
+  parcelaTotal: number | null;
+  recorrenciaId: string | null;
+  origemImportacao: string | null;
+  criadoEm: string | null;
+  atualizadoEm: string | null;
+}
+
+export type NovoLancamento = Partial<
+  Pick<
+    Lancamento,
+    | 'id'
+    | 'vencimento'
+    | 'dataPagamento'
+    | 'status'
+    | 'contaId'
+    | 'cartaoId'
+    | 'categoriaId'
+    | 'responsavelId'
+    | 'formaPagamento'
+    | 'observacao'
+    | 'favorito'
+    | 'deletedAt'
+    | 'grupoParcelamentoId'
+    | 'parcelaAtual'
+    | 'parcelaTotal'
+    | 'recorrenciaId'
+    | 'origemImportacao'
+    | 'criadoEm'
+    | 'atualizadoEm'
+  >
+> &
+  Pick<Lancamento, 'tipo' | 'descricao' | 'valor' | 'data'>;
+
+export const lancamento = defineTable<Lancamento, NovoLancamento>('lancamento', {
+  id: 'id',
+  tipo: 'tipo',
+  descricao: 'descricao',
+  valor: 'valor',
+  data: 'data',
+  vencimento: 'vencimento',
+  dataPagamento: 'data_pagamento',
+  status: 'status',
+  contaId: 'conta_id',
+  cartaoId: 'cartao_id',
+  categoriaId: 'categoria_id',
+  responsavelId: 'responsavel_id',
+  formaPagamento: 'forma_pagamento',
+  observacao: 'observacao',
+  favorito: 'favorito',
+  deletedAt: 'deleted_at',
+  grupoParcelamentoId: 'grupo_parcelamento_id',
+  parcelaAtual: 'parcela_atual',
+  parcelaTotal: 'parcela_total',
+  recorrenciaId: 'recorrencia_id',
+  origemImportacao: 'origem_importacao',
+  criadoEm: 'criado_em',
+  atualizadoEm: 'atualizado_em',
 });

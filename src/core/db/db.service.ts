@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { db, ready } from './db.client';
+import { db, supabase, supabaseConfigurado } from './db.client';
+import { responsavel } from './schema';
 
 @Injectable({ providedIn: 'root' })
 export class DbService {
@@ -8,11 +9,17 @@ export class DbService {
   readonly db = db;
 
   constructor() {
-    ready()
-      .then(() => this.isReady.set(true))
-      .catch((err: unknown) => {
-        console.error('[DbService] falha ao iniciar o banco', err);
+    if (!supabaseConfigurado || !supabase) {
+      this.error.set('Supabase não configurado (SUPABASE_URL/SUPABASE_ANON_KEY ausentes no build).');
+      return;
+    }
+    // Pinga o banco com uma consulta simples pra confirmar que a URL/chave realmente funcionam.
+    Promise.resolve(db.select().from(responsavel).limit(1)).then(
+      () => this.isReady.set(true),
+      (err: unknown) => {
+        console.error('[DbService] falha ao conectar no Supabase', err);
         this.error.set(err instanceof Error ? err.message : String(err));
-      });
+      },
+    );
   }
 }

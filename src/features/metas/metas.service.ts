@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from '../../core/db/query-builder';
 import { DbService } from '../../core/db/db.service';
 import { meta, metaMovimento } from '../../core/db/schema';
 
@@ -17,6 +17,11 @@ export class MetasService {
   private readonly dbService = inject(DbService);
 
   readonly metas = signal<MetaComPrevisao[]>([]);
+
+  constructor() {
+    this.dbService.db.subscribeTable(meta, () => void this.carregar());
+    this.dbService.db.subscribeTable(metaMovimento, () => void this.carregar());
+  }
 
   async carregar(): Promise<void> {
     const db = this.dbService.db;
@@ -60,10 +65,10 @@ export class MetasService {
     const db = this.dbService.db;
     await db.insert(metaMovimento).values({ metaId, tipo, valor, data: new Date().toISOString() });
     const delta = tipo === 'aporte' ? valor : -valor;
-    await db
-      .update(meta)
-      .set({ valorAtual: sql`${meta.valorAtual} + ${delta}` })
-      .where(eq(meta.id, metaId));
+    const [atual] = await db.select().from(meta).where(eq(meta.id, metaId));
+    if (atual) {
+      await db.update(meta).set({ valorAtual: atual.valorAtual + delta }).where(eq(meta.id, metaId));
+    }
     await this.carregar();
   }
 
