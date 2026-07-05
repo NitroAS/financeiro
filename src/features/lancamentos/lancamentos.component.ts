@@ -16,18 +16,23 @@ import { CategoriasService } from '../categorias/categorias.service';
 import { CartoesService } from '../cartoes/cartoes.service';
 import { LancamentosService, type Lancamento } from './lancamentos.service';
 
+function paraInputDate(iso: string): string {
+  return iso.slice(0, 10);
+}
+
 const lancamentoSchema = z.object({
   tipo: z.enum(['receita', 'despesa']),
   descricao: z.string().min(1, 'Informe uma descrição'),
   valor: z.number().positive('Valor deve ser maior que zero'),
   data: z.string().min(1, 'Informe a data'),
+  status: z.enum(['pendente', 'pago']),
   categoriaId: z.string().optional(),
   contaId: z.string().optional(),
   cartaoId: z.string().optional(),
   responsavelId: z.string().optional(),
   observacao: z.string().optional(),
-  parcelado: z.boolean(),
-  totalParcelas: z.number().int().min(1),
+  repeticao: z.enum(['nenhuma', 'parcelado', 'recorrente']),
+  quantidade: z.number().int().min(1).max(60),
 });
 
 const MESES = [
@@ -111,6 +116,15 @@ function parseDataLocal(iso: string): Date {
       }
 
       <app-card>
+        @if (editandoId(); as id) {
+          <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+            <span class="flex items-center gap-2">
+              <lucide-angular name="pencil" [size]="14" />
+              Editando lançamento
+            </span>
+            <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+          </div>
+        }
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-col gap-3">
           <div class="flex flex-wrap items-end gap-3">
             <div class="flex flex-col gap-1">
@@ -121,13 +135,23 @@ function parseDataLocal(iso: string): Date {
               </select>
             </div>
 
+            @if (editandoId()) {
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-medium text-muted-foreground">Status</label>
+                <select appSelect formControlName="status">
+                  <option value="pendente">Pendente</option>
+                  <option value="pago">Pago</option>
+                </select>
+              </div>
+            }
+
             <div class="flex min-w-[200px] flex-1 flex-col gap-1">
               <label class="text-xs font-medium text-muted-foreground">Descrição</label>
               <input appInput formControlName="descricao" placeholder="Ex.: Ar-condicionado" />
             </div>
 
             <div class="flex w-32 flex-col gap-1">
-              <label class="text-xs font-medium text-muted-foreground">Valor {{ form.value.parcelado ? '(parcela)' : '' }}</label>
+              <label class="text-xs font-medium text-muted-foreground">Valor {{ form.value.repeticao === 'parcelado' ? '(parcela)' : '' }}</label>
               <input appInput type="number" step="0.01" formControlName="valor" />
             </div>
 
@@ -178,15 +202,27 @@ function parseDataLocal(iso: string): Date {
           </div>
 
           <div class="flex flex-wrap items-end gap-3">
-            <label class="flex items-center gap-2 text-sm">
-              <input type="checkbox" formControlName="parcelado" class="h-4 w-4 accent-primary" />
-              Parcelado
-            </label>
-            @if (form.value.parcelado) {
-              <div class="flex w-28 flex-col gap-1">
-                <label class="text-xs font-medium text-muted-foreground">Total de parcelas</label>
-                <input appInput type="number" min="2" formControlName="totalParcelas" />
+            @if (!editandoId()) {
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-medium text-muted-foreground">Repetição</label>
+                <select appSelect formControlName="repeticao">
+                  <option value="nenhuma">Não repete</option>
+                  <option value="parcelado">Parcelado</option>
+                  <option value="recorrente">Recorrente (mensal)</option>
+                </select>
               </div>
+              @if (form.value.repeticao === 'parcelado') {
+                <div class="flex w-28 flex-col gap-1">
+                  <label class="text-xs font-medium text-muted-foreground">Total de parcelas</label>
+                  <input appInput type="number" min="2" formControlName="quantidade" />
+                </div>
+              }
+              @if (form.value.repeticao === 'recorrente') {
+                <div class="flex w-28 flex-col gap-1">
+                  <label class="text-xs font-medium text-muted-foreground">Repetir por (meses)</label>
+                  <input appInput type="number" min="2" formControlName="quantidade" />
+                </div>
+              }
             }
 
             <div class="flex min-w-[200px] flex-1 flex-col gap-1">
@@ -195,8 +231,8 @@ function parseDataLocal(iso: string): Date {
             </div>
 
             <button appButton type="submit" [disabled]="form.invalid">
-              <lucide-angular name="plus" [size]="16" />
-              Lançar
+              <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
+              {{ editandoId() ? 'Salvar alterações' : 'Lançar' }}
             </button>
           </div>
         </form>
@@ -215,6 +251,17 @@ function parseDataLocal(iso: string): Date {
                   {{ l.descricao }}
                   @if (l.parcelaTotal) {
                     <span class="ml-1 text-xs font-normal text-muted-foreground">{{ l.parcelaAtual }}/{{ l.parcelaTotal }}</span>
+                  }
+                  @if (l.recorrenciaId) {
+                    <button
+                      type="button"
+                      class="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-critical"
+                      (click)="pararRecorrencia(l.recorrenciaId)"
+                      title="Recorrente — clique para não repetir mais"
+                    >
+                      <lucide-angular name="repeat" [size]="11" />
+                      recorrente
+                    </button>
                   }
                 </div>
                 <div class="text-xs text-muted-foreground">{{ formatarData(l.data) }}</div>
@@ -253,6 +300,9 @@ function parseDataLocal(iso: string): Date {
               <button appButton variant="ghost" size="icon" type="button" (click)="duplicar(l.id)" aria-label="Duplicar">
                 <lucide-angular name="copy" [size]="15" />
               </button>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(l)" aria-label="Editar">
+                <lucide-angular name="pencil" [size]="15" />
+              </button>
               <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
@@ -282,19 +332,22 @@ export class LancamentosComponent implements OnInit {
     return `${MESES[mes]} ${ano}`;
   });
 
+  readonly editandoId = signal<string | null>(null);
+
   readonly form = this.fb.nonNullable.group(
     {
       tipo: ['despesa' as 'receita' | 'despesa', Validators.required],
       descricao: ['', Validators.required],
       valor: [0],
       data: [new Date().toISOString().slice(0, 10), Validators.required],
+      status: ['pendente' as 'pendente' | 'pago'],
       categoriaId: [''],
       contaId: [''],
       cartaoId: [''],
       responsavelId: [''],
       observacao: [''],
-      parcelado: [false],
-      totalParcelas: [2],
+      repeticao: ['nenhuma' as 'nenhuma' | 'parcelado' | 'recorrente'],
+      quantidade: [2],
     },
     { validators: zodValidator(lancamentoSchema) },
   );
@@ -334,20 +387,97 @@ export class LancamentosComponent implements OnInit {
   async salvar(): Promise<void> {
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
-    await this.lancamentosService.criar({
-      tipo: v.tipo,
-      descricao: v.descricao,
-      valor: v.valor,
-      data: parseDataLocal(v.data),
-      categoriaId: v.categoriaId || undefined,
-      contaId: v.contaId || undefined,
-      cartaoId: v.cartaoId || undefined,
-      responsavelId: v.responsavelId || undefined,
-      observacao: v.observacao || undefined,
-      parcelado: v.parcelado,
-      totalParcelas: v.totalParcelas,
+    const editandoId = this.editandoId();
+
+    if (editandoId) {
+      await this.lancamentosService.atualizar(editandoId, {
+        tipo: v.tipo,
+        descricao: v.descricao,
+        valor: v.valor,
+        data: parseDataLocal(v.data),
+        status: v.status,
+        categoriaId: v.categoriaId || undefined,
+        contaId: v.contaId || undefined,
+        cartaoId: v.cartaoId || undefined,
+        responsavelId: v.responsavelId || undefined,
+        observacao: v.observacao || undefined,
+      });
+      this.cancelarEdicao();
+      return;
+    }
+
+    if (v.repeticao === 'recorrente') {
+      await this.lancamentosService.criarRecorrente({
+        tipo: v.tipo,
+        descricao: v.descricao,
+        valor: v.valor,
+        data: parseDataLocal(v.data),
+        meses: v.quantidade,
+        categoriaId: v.categoriaId || undefined,
+        contaId: v.contaId || undefined,
+        cartaoId: v.cartaoId || undefined,
+        responsavelId: v.responsavelId || undefined,
+        observacao: v.observacao || undefined,
+      });
+    } else {
+      await this.lancamentosService.criar({
+        tipo: v.tipo,
+        descricao: v.descricao,
+        valor: v.valor,
+        data: parseDataLocal(v.data),
+        categoriaId: v.categoriaId || undefined,
+        contaId: v.contaId || undefined,
+        cartaoId: v.cartaoId || undefined,
+        responsavelId: v.responsavelId || undefined,
+        observacao: v.observacao || undefined,
+        parcelado: v.repeticao === 'parcelado',
+        totalParcelas: v.quantidade,
+      });
+    }
+    this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2 });
+  }
+
+  editar(l: Lancamento): void {
+    this.editandoId.set(l.id);
+    this.form.patchValue({
+      tipo: l.tipo,
+      descricao: l.descricao,
+      valor: l.valor,
+      data: paraInputDate(l.data),
+      status: l.status === 'pago' ? 'pago' : 'pendente',
+      categoriaId: l.categoriaId ?? '',
+      contaId: l.contaId ?? '',
+      cartaoId: l.cartaoId ?? '',
+      responsavelId: l.responsavelId ?? '',
+      observacao: l.observacao ?? '',
+      repeticao: 'nenhuma',
     });
-    this.form.patchValue({ descricao: '', valor: 0, observacao: '', parcelado: false, totalParcelas: 2 });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  cancelarEdicao(): void {
+    this.editandoId.set(null);
+    this.form.reset({
+      tipo: 'despesa',
+      descricao: '',
+      valor: 0,
+      data: new Date().toISOString().slice(0, 10),
+      status: 'pendente',
+      categoriaId: '',
+      contaId: '',
+      cartaoId: '',
+      responsavelId: '',
+      observacao: '',
+      repeticao: 'nenhuma',
+      quantidade: 2,
+    });
+  }
+
+  async pararRecorrencia(recorrenciaId: string | null): Promise<void> {
+    if (!recorrenciaId) return;
+    if (confirm('Isso remove as próximas ocorrências ainda não vencidas desta recorrência. O que já passou/foi pago continua no histórico. Continuar?')) {
+      await this.lancamentosService.removerRecorrencia(recorrenciaId);
+    }
   }
 
   async marcarPago(id: string): Promise<void> {

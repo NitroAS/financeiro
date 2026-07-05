@@ -1,8 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { and, desc, eq, gte, isNotNull, isNull, lt } from 'drizzle-orm';
 import { DbService } from '../../core/db/db.service';
-import { lancamento } from '../../core/db/schema';
-import { gerarParcelas, type NovoParcelamento } from '../../shared/utils/parcelamento';
+import { lancamento, recorrencia } from '../../core/db/schema';
+import { addMonthsClamped, gerarParcelas, type NovoParcelamento } from '../../shared/utils/parcelamento';
 
 export type Lancamento = typeof lancamento.$inferSelect;
 
@@ -19,6 +19,32 @@ export interface NovoLancamentoInput {
   observacao?: string;
   parcelado: boolean;
   totalParcelas: number;
+}
+
+export interface NovaRecorrenciaInput {
+  tipo: 'receita' | 'despesa';
+  descricao: string;
+  valor: number;
+  data: Date;
+  meses: number;
+  categoriaId?: string;
+  contaId?: string;
+  cartaoId?: string;
+  responsavelId?: string;
+  observacao?: string;
+}
+
+export interface EdicaoLancamentoInput {
+  tipo: 'receita' | 'despesa';
+  descricao: string;
+  valor: number;
+  data: Date;
+  status: 'pendente' | 'pago';
+  categoriaId?: string;
+  contaId?: string;
+  cartaoId?: string;
+  responsavelId?: string;
+  observacao?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -90,6 +116,75 @@ export class LancamentosService {
       });
     }
 
+    await this.carregar();
+  }
+
+  /** Gera de uma vez as próximas N ocorrências mensais (ex.: salário, aluguel), todas ligadas
+   * pelo mesmo recorrenciaId — ver `removerRecorrencia` para interromper as futuras. */
+  async criarRecorrente(input: NovaRecorrenciaInput): Promise<void> {
+    const recorrenciaId = crypto.randomUUID();
+    await this.dbService.db.insert(recorrencia).values({
+      id: recorrenciaId,
+      frequencia: 'mensal',
+      diaReferencia: input.data.getDate(),
+      ativa: true,
+    });
+
+    const base = {
+      tipo: input.tipo,
+      descricao: input.descricao,
+      valor: input.valor,
+      status: 'pendente' as const,
+      contaId: input.contaId || undefined,
+      cartaoId: input.cartaoId || undefined,
+      categoriaId: input.categoriaId || undefined,
+      responsavelId: input.responsavelId || undefined,
+      observacao: input.observacao || undefined,
+      recorrenciaId,
+    };
+
+    const ocorrencias = Array.from({ length: Math.max(1, input.meses) }, (_, index) => {
+      const data = addMonthsClamped(input.data, index).toISOString();
+      return { ...base, data, vencimento: data };
+    });
+
+    await this.dbService.db.insert(lancamento).values(ocorrencias);
+    await this.carregar();
+  }
+
+  /** Interrompe uma recorrência: remove (para a lixeira) as ocorrências futuras ainda não
+   * vencidas e desativa a regra, preservando o histórico já ocorrido/pago. */
+  async removerRecorrencia(recorrenciaId: string): Promise<void> {
+    const hoje = new Date();
+    const fimMesAtual = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1).toISOString();
+    await this.dbService.db
+      .update(lancamento)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(and(eq(lancamento.recorrenciaId, recorrenciaId), gte(lancamento.data, fimMesAtual)));
+    await this.dbService.db.update(recorrencia).set({ ativa: false }).where(eq(recorrencia.id, recorrenciaId));
+    await this.carregar();
+  }
+
+  async atualizar(id: string, input: EdicaoLancamentoInput): Promise<void> {
+    const atual = this.lancamentos().find((l) => l.id === id);
+    const jaEraPago = atual?.status === 'pago';
+    await this.dbService.db
+      .update(lancamento)
+      .set({
+        tipo: input.tipo,
+        descricao: input.descricao,
+        valor: input.valor,
+        data: input.data.toISOString(),
+        vencimento: input.data.toISOString(),
+        status: input.status,
+        dataPagamento: input.status === 'pago' ? (jaEraPago ? atual?.dataPagamento : new Date().toISOString()) : null,
+        categoriaId: input.categoriaId || null,
+        contaId: input.contaId || null,
+        cartaoId: input.cartaoId || null,
+        responsavelId: input.responsavelId || null,
+        observacao: input.observacao || null,
+      })
+      .where(eq(lancamento.id, id));
     await this.carregar();
   }
 
