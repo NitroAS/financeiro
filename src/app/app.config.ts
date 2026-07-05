@@ -48,6 +48,7 @@ import {
   Menu,
   FileSpreadsheet,
   LogOut,
+  Layers,
 } from 'lucide-angular';
 
 import { routes } from './app.routes';
@@ -105,6 +106,7 @@ export const appConfig: ApplicationConfig = {
         Menu,
         FileSpreadsheet,
         LogOut,
+        Layers,
       }),
     ), provideServiceWorker('ngsw-worker.js', {
             enabled: !isDevMode(),

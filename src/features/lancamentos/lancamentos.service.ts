@@ -236,6 +236,24 @@ export class LancamentosService {
     await this.carregar();
   }
 
+  /** Todas as parcelas do mesmo parcelamento (passadas e futuras), pra tela de detalhe. */
+  async buscarGrupoParcelamento(grupoParcelamentoId: string): Promise<Lancamento[]> {
+    return this.dbService.db
+      .select()
+      .from(lancamento)
+      .where(and(eq(lancamento.grupoParcelamentoId, grupoParcelamentoId), isNull(lancamento.deletedAt)))
+      .orderBy(lancamento.data);
+  }
+
+  /** Todas as ocorrências da mesma recorrência (passadas e futuras), pra tela de detalhe. */
+  async buscarRecorrencia(recorrenciaId: string): Promise<Lancamento[]> {
+    return this.dbService.db
+      .select()
+      .from(lancamento)
+      .where(and(eq(lancamento.recorrenciaId, recorrenciaId), isNull(lancamento.deletedAt)))
+      .orderBy(lancamento.data);
+  }
+
   async carregarLixeira(): Promise<void> {
     const rows = await this.dbService.db
       .select()

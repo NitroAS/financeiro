@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { z } from 'zod';
@@ -51,6 +51,7 @@ function parseDataLocal(iso: string): Date {
   imports: [
     ReactiveFormsModule,
     DecimalPipe,
+    NgTemplateOutlet,
     LucideAngularModule,
     CardComponent,
     BadgeComponent,
@@ -115,16 +116,7 @@ function parseDataLocal(iso: string): Date {
         </app-card>
       }
 
-      <app-card>
-        @if (editandoId(); as id) {
-          <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
-            <span class="flex items-center gap-2">
-              <lucide-angular name="pencil" [size]="14" />
-              Editando lançamento
-            </span>
-            <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
-          </div>
-        }
+      <ng-template #formularioLancamento>
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-col gap-3">
           <div class="flex flex-wrap items-end gap-3">
             <div class="flex flex-col gap-1">
@@ -212,15 +204,39 @@ function parseDataLocal(iso: string): Date {
                 </select>
               </div>
               @if (form.value.repeticao === 'parcelado') {
-                <div class="flex w-28 flex-col gap-1">
+                <div class="flex flex-col gap-1">
                   <label class="text-xs font-medium text-muted-foreground">Total de parcelas</label>
-                  <input appInput type="number" min="2" formControlName="quantidade" />
+                  <div class="flex flex-wrap items-center gap-1">
+                    <input appInput type="number" min="2" class="w-20" formControlName="quantidade" />
+                    @for (n of opcoesParcelas; track n) {
+                      <button
+                        type="button"
+                        class="rounded-md border border-border px-2 py-1 text-xs"
+                        [class]="form.value.quantidade === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'"
+                        (click)="form.patchValue({ quantidade: n })"
+                      >
+                        {{ n }}x
+                      </button>
+                    }
+                  </div>
                 </div>
               }
               @if (form.value.repeticao === 'recorrente') {
-                <div class="flex w-28 flex-col gap-1">
+                <div class="flex flex-col gap-1">
                   <label class="text-xs font-medium text-muted-foreground">Repetir por (meses)</label>
-                  <input appInput type="number" min="2" formControlName="quantidade" />
+                  <div class="flex flex-wrap items-center gap-1">
+                    <input appInput type="number" min="2" class="w-20" formControlName="quantidade" />
+                    @for (n of opcoesRecorrencia; track n) {
+                      <button
+                        type="button"
+                        class="rounded-md border border-border px-2 py-1 text-xs"
+                        [class]="form.value.quantidade === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'"
+                        (click)="form.patchValue({ quantidade: n })"
+                      >
+                        {{ n }}
+                      </button>
+                    }
+                  </div>
                 </div>
               }
             }
@@ -236,87 +252,173 @@ function parseDataLocal(iso: string): Date {
             </button>
           </div>
         </form>
-      </app-card>
+      </ng-template>
+
+      @if (!editandoId()) {
+        <app-card>
+          <ng-container *ngTemplateOutlet="formularioLancamento" />
+        </app-card>
+      }
 
       <div class="flex flex-col gap-2">
         @for (l of lancamentosService.lancamentos(); track l.id) {
-          <app-card
-            [id]="'lancamento-' + l.id"
-            class="flex items-center justify-between transition-shadow duration-500"
-            [class.ring-2]="lancamentosService.destacarId() === l.id"
-            [class.ring-primary]="lancamentosService.destacarId() === l.id"
-          >
-            <div class="flex items-center gap-3">
-              <span
-                class="h-2.5 w-2.5 rounded-full"
-                [class]="l.tipo === 'receita' ? 'bg-success' : 'bg-critical'"
-              ></span>
-              <div>
-                <div class="text-sm font-medium">
-                  {{ l.descricao }}
-                  @if (l.parcelaTotal) {
-                    <span class="ml-1 text-xs font-normal text-muted-foreground">{{ l.parcelaAtual }}/{{ l.parcelaTotal }}</span>
-                  }
-                  @if (l.recorrenciaId) {
-                    <button
-                      type="button"
-                      class="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-critical"
-                      (click)="pararRecorrencia(l.recorrenciaId)"
-                      title="Recorrente — clique para não repetir mais"
-                    >
-                      <lucide-angular name="repeat" [size]="11" />
-                      recorrente
-                    </button>
-                  }
-                </div>
-                <div class="text-xs text-muted-foreground">{{ formatarData(l.data) }}</div>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              @if (responsavelPor(l.responsavelId); as resp) {
-                <span
-                  class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                  [style.backgroundColor]="resp.cor + '1a'"
-                  [style.color]="resp.cor"
-                >
-                  <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
-                  {{ resp.nome }}
+          @if (editandoId() === l.id) {
+            <app-card [id]="'lancamento-' + l.id">
+              <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+                <span class="flex items-center gap-2">
+                  <lucide-angular name="pencil" [size]="14" />
+                  Editando lançamento
                 </span>
-              }
-              <app-badge [variant]="l.status === 'pago' ? 'success' : 'warning'">{{ l.status }}</app-badge>
-              <span class="tabular-nums text-sm font-medium" [class]="l.tipo === 'receita' ? 'text-success' : ''">
-                {{ l.tipo === 'receita' ? '+' : '-' }}{{ l.valor | number: '1.2-2' }}
-              </span>
-              @if (l.status !== 'pago') {
-                <button appButton variant="ghost" size="icon" type="button" (click)="marcarPago(l.id)" aria-label="Marcar como pago">
-                  <lucide-angular name="check" [size]="15" />
+                <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+              </div>
+              <ng-container *ngTemplateOutlet="formularioLancamento" />
+            </app-card>
+          } @else {
+            <app-card
+              [id]="'lancamento-' + l.id"
+              class="flex items-center justify-between transition-shadow duration-500"
+              [class.ring-2]="lancamentosService.destacarId() === l.id"
+              [class.ring-primary]="lancamentosService.destacarId() === l.id"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="h-2.5 w-2.5 rounded-full"
+                  [class]="l.tipo === 'receita' ? 'bg-success' : 'bg-critical'"
+                ></span>
+                <div>
+                  <div class="text-sm font-medium">
+                    @if (l.grupoParcelamentoId || l.recorrenciaId) {
+                      <button type="button" class="text-left hover:underline" (click)="verDetalhe(l)">{{ l.descricao }}</button>
+                    } @else {
+                      {{ l.descricao }}
+                    }
+                    @if (l.parcelaTotal) {
+                      <button
+                        type="button"
+                        class="ml-1 text-xs font-normal text-muted-foreground hover:text-primary hover:underline"
+                        (click)="verDetalhe(l)"
+                      >
+                        {{ l.parcelaAtual }}/{{ l.parcelaTotal }}
+                      </button>
+                    }
+                    @if (l.recorrenciaId) {
+                      <button
+                        type="button"
+                        class="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-primary"
+                        (click)="verDetalhe(l)"
+                        title="Recorrente — clique para ver as ocorrências"
+                      >
+                        <lucide-angular name="repeat" [size]="11" />
+                        recorrente
+                      </button>
+                    }
+                  </div>
+                  <div class="text-xs text-muted-foreground">{{ formatarData(l.data) }}</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                @if (responsavelPor(l.responsavelId); as resp) {
+                  <span
+                    class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                    [style.backgroundColor]="resp.cor + '1a'"
+                    [style.color]="resp.cor"
+                  >
+                    <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
+                    {{ resp.nome }}
+                  </span>
+                }
+                <app-badge [variant]="l.status === 'pago' ? 'success' : 'warning'">{{ l.status }}</app-badge>
+                <span class="tabular-nums text-sm font-medium" [class]="l.tipo === 'receita' ? 'text-success' : ''">
+                  {{ l.tipo === 'receita' ? '+' : '-' }}{{ l.valor | number: '1.2-2' }}
+                </span>
+                @if (l.status !== 'pago') {
+                  <button appButton variant="ghost" size="icon" type="button" (click)="marcarPago(l.id)" aria-label="Marcar como pago">
+                    <lucide-angular name="check" [size]="15" />
+                  </button>
+                }
+                <button
+                  appButton
+                  variant="ghost"
+                  size="icon"
+                  type="button"
+                  (click)="favoritar(l)"
+                  [attr.aria-label]="l.favorito ? 'Remover dos favoritos' : 'Favoritar'"
+                >
+                  <lucide-angular name="star" [size]="15" [class]="l.favorito ? 'text-warning' : ''" />
                 </button>
-              }
-              <button
-                appButton
-                variant="ghost"
-                size="icon"
-                type="button"
-                (click)="favoritar(l)"
-                [attr.aria-label]="l.favorito ? 'Remover dos favoritos' : 'Favoritar'"
-              >
-                <lucide-angular name="star" [size]="15" [class]="l.favorito ? 'text-warning' : ''" />
-              </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="duplicar(l.id)" aria-label="Duplicar">
-                <lucide-angular name="copy" [size]="15" />
-              </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="editar(l)" aria-label="Editar">
-                <lucide-angular name="pencil" [size]="15" />
-              </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
-                <lucide-angular name="trash-2" [size]="15" />
-              </button>
-            </div>
-          </app-card>
+                <button appButton variant="ghost" size="icon" type="button" (click)="duplicar(l.id)" aria-label="Duplicar">
+                  <lucide-angular name="copy" [size]="15" />
+                </button>
+                <button appButton variant="ghost" size="icon" type="button" (click)="editar(l)" aria-label="Editar">
+                  <lucide-angular name="pencil" [size]="15" />
+                </button>
+                <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
+                  <lucide-angular name="trash-2" [size]="15" />
+                </button>
+              </div>
+            </app-card>
+          }
         } @empty {
           <app-card class="text-sm text-muted-foreground">Nenhum lançamento neste mês.</app-card>
         }
       </div>
+
+      @if (detalhe(); as d) {
+        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[12vh]" (click)="fecharDetalhe()">
+          <div class="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-lg" (click)="$event.stopPropagation()">
+            <div class="flex items-center justify-between">
+              <h2 class="flex items-center gap-2 text-sm font-semibold">
+                <lucide-angular [name]="d.recorrenciaId ? 'repeat' : 'layers'" [size]="16" />
+                {{ d.recorrenciaId ? 'Ocorrências da recorrência' : 'Parcelas' }}
+              </h2>
+              <button appButton variant="ghost" size="icon" type="button" (click)="fecharDetalhe()" aria-label="Fechar">
+                <lucide-angular name="x" [size]="16" />
+              </button>
+            </div>
+
+            <div class="mt-3 flex flex-col gap-1.5 text-sm">
+              <div class="flex justify-between">
+                <span class="text-muted-foreground">Total de {{ d.recorrenciaId ? 'ocorrências' : 'parcelas' }}</span>
+                <span class="font-medium">{{ d.itens.length }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-muted-foreground">Pagas</span>
+                <span class="font-medium text-success">{{ contarPagas(d.itens) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-muted-foreground">Restante a pagar</span>
+                <span class="font-medium">{{ somaRestante(d.itens) | number: '1.2-2' }}</span>
+              </div>
+            </div>
+
+            <div class="mt-3 flex max-h-80 flex-col gap-1 overflow-y-auto">
+              @for (item of d.itens; track item.id) {
+                <div class="flex items-center justify-between rounded-md px-2 py-1.5 text-sm" [class]="ehFuturo(item) ? 'bg-muted/50' : ''">
+                  <div class="flex items-center gap-2">
+                    @if (item.parcelaTotal) {
+                      <span class="w-8 shrink-0 tabular-nums text-xs text-muted-foreground">{{ item.parcelaAtual }}/{{ item.parcelaTotal }}</span>
+                    }
+                    <span>{{ formatarData(item.data) }}</span>
+                    @if (ehFuturo(item)) {
+                      <span class="text-xs text-muted-foreground">(futuro)</span>
+                    }
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="tabular-nums">{{ item.valor | number: '1.2-2' }}</span>
+                    <app-badge [variant]="item.status === 'pago' ? 'success' : 'warning'">{{ item.status }}</app-badge>
+                  </div>
+                </div>
+              }
+            </div>
+
+            @if (d.recorrenciaId; as recorrenciaId) {
+              <button appButton variant="outline" class="mt-4 w-full text-critical" type="button" (click)="pararRecorrenciaDetalhe(recorrenciaId)">
+                Parar recorrência (remove ocorrências futuras)
+              </button>
+            }
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -338,6 +440,9 @@ export class LancamentosComponent implements OnInit {
   });
 
   readonly editandoId = signal<string | null>(null);
+  readonly detalhe = signal<{ itens: Lancamento[]; recorrenciaId: string | null } | null>(null);
+  readonly opcoesParcelas = [2, 3, 4, 6, 10, 12, 18, 24];
+  readonly opcoesRecorrencia = [3, 6, 12, 24, 36];
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -472,7 +577,6 @@ export class LancamentosComponent implements OnInit {
       observacao: l.observacao ?? '',
       repeticao: 'nenhuma',
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   cancelarEdicao(): void {
@@ -493,10 +597,36 @@ export class LancamentosComponent implements OnInit {
     });
   }
 
-  async pararRecorrencia(recorrenciaId: string | null): Promise<void> {
-    if (!recorrenciaId) return;
+  async verDetalhe(l: Lancamento): Promise<void> {
+    if (l.grupoParcelamentoId) {
+      const itens = await this.lancamentosService.buscarGrupoParcelamento(l.grupoParcelamentoId);
+      this.detalhe.set({ itens, recorrenciaId: null });
+    } else if (l.recorrenciaId) {
+      const itens = await this.lancamentosService.buscarRecorrencia(l.recorrenciaId);
+      this.detalhe.set({ itens, recorrenciaId: l.recorrenciaId });
+    }
+  }
+
+  fecharDetalhe(): void {
+    this.detalhe.set(null);
+  }
+
+  contarPagas(itens: Lancamento[]): number {
+    return itens.filter((i) => i.status === 'pago').length;
+  }
+
+  somaRestante(itens: Lancamento[]): number {
+    return itens.filter((i) => i.status !== 'pago').reduce((soma, i) => soma + i.valor, 0);
+  }
+
+  ehFuturo(item: Lancamento): boolean {
+    return parseDataLocal(item.data.slice(0, 10)) > new Date();
+  }
+
+  async pararRecorrenciaDetalhe(recorrenciaId: string): Promise<void> {
     if (confirm('Isso remove as próximas ocorrências ainda não vencidas desta recorrência. O que já passou/foi pago continua no histórico. Continuar?')) {
       await this.lancamentosService.removerRecorrencia(recorrenciaId);
+      this.fecharDetalhe();
     }
   }
 
