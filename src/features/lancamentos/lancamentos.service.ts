@@ -55,6 +55,7 @@ export class LancamentosService {
   readonly lixeira = signal<Lancamento[]>([]);
   readonly mesReferencia = signal<{ mes: number; ano: number }>(mesAtual());
   readonly filtroResponsavelId = signal<string>('');
+  readonly destacarId = signal<string | null>(null);
 
   async carregar(): Promise<void> {
     const { mes, ano } = this.mesReferencia();
@@ -82,6 +83,16 @@ export class LancamentosService {
   filtrarPorResponsavel(responsavelId: string): void {
     this.filtroResponsavelId.set(responsavelId);
     void this.carregar();
+  }
+
+  /** Usado pela busca global: pula direto para o mês do lançamento (limpando qualquer
+   * filtro de responsável que possa escondê-lo) e marca o item para ser destacado na tela. */
+  async irParaLancamento(l: Lancamento): Promise<void> {
+    const data = new Date(l.data);
+    this.filtroResponsavelId.set('');
+    this.mesReferencia.set({ mes: data.getMonth(), ano: data.getFullYear() });
+    this.destacarId.set(l.id);
+    await this.carregar();
   }
 
   async criar(input: NovoLancamentoInput): Promise<void> {

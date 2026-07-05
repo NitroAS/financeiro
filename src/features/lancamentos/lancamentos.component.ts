@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -240,7 +240,12 @@ function parseDataLocal(iso: string): Date {
 
       <div class="flex flex-col gap-2">
         @for (l of lancamentosService.lancamentos(); track l.id) {
-          <app-card class="flex items-center justify-between">
+          <app-card
+            [id]="'lancamento-' + l.id"
+            class="flex items-center justify-between transition-shadow duration-500"
+            [class.ring-2]="lancamentosService.destacarId() === l.id"
+            [class.ring-primary]="lancamentosService.destacarId() === l.id"
+          >
             <div class="flex items-center gap-3">
               <span
                 class="h-2.5 w-2.5 rounded-full"
@@ -351,6 +356,21 @@ export class LancamentosComponent implements OnInit {
     },
     { validators: zodValidator(lancamentoSchema) },
   );
+
+  constructor() {
+    // Quando a busca global manda destacar um lançamento, rola até ele assim que a
+    // lista do mês certo termina de carregar e remove o destaque depois de um tempo.
+    effect(() => {
+      const id = this.lancamentosService.destacarId();
+      const lista = this.lancamentosService.lancamentos();
+      if (!id || !lista.some((l) => l.id === id)) return;
+
+      queueMicrotask(() => {
+        document.getElementById('lancamento-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      setTimeout(() => this.lancamentosService.destacarId.set(null), 2500);
+    });
+  }
 
   ngOnInit(): void {
     void this.lancamentosService.carregar();

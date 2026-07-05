@@ -5,7 +5,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { BuscaStore } from '../../core/state/busca.store';
 import { NAV_ITEMS } from '../../app/shell/nav-items';
 import { BuscaService } from './busca.service';
-import type { Lancamento } from '../lancamentos/lancamentos.service';
+import { LancamentosService, type Lancamento } from '../lancamentos/lancamentos.service';
 
 @Component({
   selector: 'app-command-palette',
@@ -51,10 +51,13 @@ import type { Lancamento } from '../lancamentos/lancamentos.service';
               @for (l of resultados(); track l.id) {
                 <button
                   type="button"
-                  (click)="irParaLancamento()"
+                  (click)="irParaLancamento(l)"
                   class="flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted"
                 >
-                  <span class="truncate">{{ l.descricao }}</span>
+                  <span class="truncate">
+                    {{ l.descricao }}
+                    <span class="text-xs text-muted-foreground">{{ formatarData(l.data) }}</span>
+                  </span>
                   <span class="tabular-nums text-xs text-muted-foreground">{{ l.valor | number: '1.2-2' }}</span>
                 </button>
               }
@@ -72,6 +75,7 @@ import type { Lancamento } from '../lancamentos/lancamentos.service';
 export class CommandPaletteComponent {
   readonly buscaStore = inject(BuscaStore);
   private readonly buscaService = inject(BuscaService);
+  private readonly lancamentosService = inject(LancamentosService);
   private readonly router = inject(Router);
 
   readonly termo = signal('');
@@ -97,8 +101,13 @@ export class CommandPaletteComponent {
     this.buscaStore.fechar();
   }
 
-  irParaLancamento(): void {
-    void this.router.navigateByUrl('/lancamentos');
+  async irParaLancamento(l: Lancamento): Promise<void> {
+    await this.lancamentosService.irParaLancamento(l);
+    await this.router.navigateByUrl('/lancamentos');
     this.buscaStore.fechar();
+  }
+
+  formatarData(iso: string): string {
+    return new Date(iso).toLocaleDateString('pt-BR');
   }
 }
