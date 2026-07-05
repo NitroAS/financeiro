@@ -36,16 +36,26 @@ path de assets.
 
 ## Importar uma planilha existente
 
-O app não guarda nem processa sua planilha — o parser roda localmente no seu computador e gera
-um arquivo de backup que você restaura pela própria interface:
+**Direto pelo app**: ícone de planilha (📄) na topbar → escolha o `.xlsx` → pronto. Tudo roda no
+navegador (o arquivo nunca sai do seu aparelho) e insere direto no banco. É idempotente: se você
+importar a mesma planilha de novo (ou uma versão mais atualizada dela), os lançamentos já
+importados antes não se repetem — só o que é novo entra.
+
+A lógica de leitura fica em `src/shared/xlsx-import/` (parser + categorização) e
+`src/features/importacao/importacao.service.ts` (grava no banco). O parser espera o formato
+"Contas Rotativas / Contas Fixas" por pessoa/mês; ajuste `categorizar.ts` se suas categorias forem
+diferentes.
+
+**Via linha de comando** (gera um arquivo de backup para restaurar manualmente, útil para inspecionar
+o resultado antes de trazer pro app):
 
 ```bash
 node scripts/import-planilha/run.mjs /caminho/para/sua-planilha.xlsx financeiro-import.json
 ```
 
-Depois, abra o app → ícone de upload no topo → selecione o `financeiro-import.json` gerado.
-O parser espera o formato "Contas Rotativas / Contas Fixas" por pessoa/mês (ver
-`scripts/import-planilha/parseMes.mjs`); ajuste `categorizar.mjs` se suas categorias forem diferentes.
+Depois, abra o app → ícone de upload (restaurar backup) no topo → selecione o
+`financeiro-import.json` gerado. Essa versão é uma cópia equivalente do parser em Node
+(`scripts/import-planilha/parseMes.mjs`) — mudanças em um devem ser espelhadas no outro.
 
 ## Backup e restauração
 

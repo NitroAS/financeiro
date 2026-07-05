@@ -159,7 +159,7 @@ for (const e of entradas) {
     parcelaAtual: null,
     parcelaTotal: null,
     recorrenciaId: null,
-    origemImportacao: `xlsx:${e.mes + 1}/${e.ano}:${e.pessoa}:${e.tipoConta}`,
+    origemImportacao: `xlsx:${e.mes + 1}/${e.ano}:${e.pessoa}:${e.tipoConta}:${normalizar(e.descricao)}:${e.valor}`,
     criadoEm: new Date().toISOString(),
     atualizadoEm: null,
   };
@@ -227,7 +227,7 @@ for (const t of totaisSoltos) {
     parcelaAtual: null,
     parcelaTotal: null,
     recorrenciaId: null,
-    origemImportacao: `xlsx:solto:${t.origemAba}`,
+    origemImportacao: `xlsx:solto:${t.origemAba}:${t.valor}`,
     criadoEm: new Date().toISOString(),
     atualizadoEm: null,
   });

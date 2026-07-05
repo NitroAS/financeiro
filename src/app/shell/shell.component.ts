@@ -9,12 +9,13 @@ import { DbService } from '../../core/db/db.service';
 import { BuscaStore } from '../../core/state/busca.store';
 import { CommandPaletteComponent } from '../../features/busca/command-palette.component';
 import { BackupService } from '../../core/db/backup.service';
+import { ImportarPlanilhaComponent } from '../../features/importacao/importar-planilha.component';
 import { NAV_ITEMS } from './nav-items';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule, CommandPaletteComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule, CommandPaletteComponent, ImportarPlanilhaComponent],
   template: `
     <div class="flex h-screen overflow-hidden bg-background text-foreground">
       @if (menuAberto()) {
@@ -100,6 +101,8 @@ import { NAV_ITEMS } from './nav-items';
               {{ dbStatusLabel() }}
             </span>
             <span class="h-1.5 w-1.5 rounded-full sm:hidden" [class]="dbDotClass()" [attr.data-testid]="'db-status-dot'"></span>
+
+            <app-importar-planilha />
 
             <button
               type="button"
