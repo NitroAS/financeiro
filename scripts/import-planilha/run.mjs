@@ -7,7 +7,7 @@
 // Uso: node scripts/import-planilha/run.mjs <caminho-do-xlsx> [saida.json]
 import { readFileSync, writeFileSync } from 'node:fs';
 import XLSX from 'xlsx';
-import { parseNomeAba, parseAbaMensal } from './parseMes.mjs';
+import { parseNomeAba, parseAbaMensal, extrairTotaisSoltos, diaClamped } from './parseMes.mjs';
 import { categorizar } from './categorizar.mjs';
 
 const [, , caminhoXlsx, caminhoSaida = 'financeiro-import.json'] = process.argv;
@@ -73,15 +73,21 @@ const wb = XLSX.readFile(caminhoXlsx, { cellDates: true });
 const ABAS_ESPECIAIS = new Set(['Viagem SP', 'Cart. Mami Agosto 25']);
 
 let entradas = [];
+let salarios = [];
 for (const nomeAba of wb.SheetNames) {
   if (ABAS_ESPECIAIS.has(nomeAba)) continue;
   const refMes = parseNomeAba(nomeAba);
   if (!refMes) continue;
   const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header: 1, defval: null });
-  entradas.push(...parseAbaMensal(linhas, refMes.mes, refMes.ano));
+  const resultado = parseAbaMensal(linhas, refMes.mes, refMes.ano);
+  entradas.push(...resultado.entradas);
+  salarios.push(...resultado.salarios);
 }
 
+const totaisSoltos = extrairTotaisSoltos(wb, XLSX);
+
 console.log(`Lidas ${entradas.length} entradas de ${wb.SheetNames.length} abas.`);
+console.log(`Salários encontrados: ${salarios.length}. Compras avulsas (deduplicadas): ${totaisSoltos.length}.`);
 
 // --- 2. Criar cartões a partir das origens das compras rotativas ---
 const cartoesPorChave = new Map();
@@ -167,6 +173,66 @@ for (const e of entradas) {
   lancamentos.push(base);
 }
 
+// --- 3b. Salários (única fonte de receita da planilha, embutida no texto do cabeçalho) ---
+for (const s of salarios) {
+  const dataIso = diaClamped(s.ano, s.mes, 5);
+  lancamentos.push({
+    id: uuid(),
+    tipo: 'receita',
+    descricao: `Salário${s.pessoa ? ' - ' + s.pessoa : ''}`,
+    valor: s.valor,
+    data: dataIso,
+    vencimento: dataIso,
+    dataPagamento: dataIso,
+    status: 'pago',
+    contaId: null,
+    cartaoId: null,
+    categoriaId: 'cat-salario',
+    responsavelId: PESSOA_PARA_RESPONSAVEL[s.pessoa] ?? null,
+    formaPagamento: null,
+    observacao: null,
+    favorito: false,
+    deletedAt: null,
+    grupoParcelamentoId: null,
+    parcelaAtual: null,
+    parcelaTotal: null,
+    recorrenciaId: null,
+    origemImportacao: `xlsx:${s.mes + 1}/${s.ano}:${s.pessoa}:salario`,
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: null,
+  });
+}
+
+// --- 3c. Compras avulsas de colecionáveis (blocos soltos fora das tabelas, deduplicados) ---
+for (const t of totaisSoltos) {
+  const dataIso = t.mes !== null ? diaClamped(t.ano, t.mes, 15) : new Date().toISOString();
+  lancamentos.push({
+    id: uuid(),
+    tipo: 'despesa',
+    descricao: 'Compra de cards/colecionáveis',
+    valor: t.valor,
+    data: dataIso,
+    vencimento: dataIso,
+    dataPagamento: null,
+    status: 'pendente',
+    contaId: null,
+    cartaoId: null,
+    categoriaId: 'cat-hobby',
+    responsavelId: null,
+    formaPagamento: null,
+    observacao: `Valor consolidado de uma nota solta que se repetia em várias abas da planilha (ex.: ${t.origemAba}) — revise a data e o responsável.`,
+    favorito: false,
+    deletedAt: null,
+    grupoParcelamentoId: null,
+    parcelaAtual: null,
+    parcelaTotal: null,
+    recorrenciaId: null,
+    origemImportacao: `xlsx:solto:${t.origemAba}`,
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: null,
+  });
+}
+
 // --- 4. Montar arquivo de backup ---
 const backup = {
   versao: 1,
@@ -195,6 +261,8 @@ writeFileSync(caminhoSaida, JSON.stringify(backup, null, 2));
 
 console.log(`\nResumo da importação:`);
 console.log(`  Lançamentos: ${lancamentos.length}`);
+console.log(`  Receitas (salário): ${salarios.length}`);
+console.log(`  Compras avulsas de colecionáveis (deduplicadas): ${totaisSoltos.length}`);
 console.log(`  Cartões criados: ${cartoes.length}`);
 console.log(`  Sem responsável identificado: ${semResponsavel}`);
 console.log(`  Parcelas com fração N/M preservada: ${parcelasFracao}`);

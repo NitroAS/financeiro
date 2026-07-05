@@ -35,10 +35,23 @@ function interpretarParcela(v) {
   return { tipo: 'indefinido', bruto: s };
 }
 
-function diaClamped(ano, mes, dia) {
+export function diaClamped(ano, mes, dia) {
   if (!dia || dia < 1) return null;
   const ultimoDia = new Date(ano, mes + 1, 0).getDate();
   return new Date(ano, mes, Math.min(Math.floor(dia), ultimoDia)).toISOString();
+}
+
+/** "2.841,58" / "2591,44" (formato BR) -> 2841.58 / 2591.44 */
+function parseValorBR(s) {
+  const limpo = s.replace(/[^\d.,]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** O cabeçalho do bloco às vezes traz o salário da pessoa embutido no texto (única fonte de receita da planilha). */
+function extrairSalario(textoBloco) {
+  const match = textoBloco.match(/s[áa]lario\s*([\d.,]+)/i);
+  return match ? parseValorBR(match[1]) : null;
 }
 
 /** Acha, numa linha, todas as colunas onde a célula é exatamente "NOME" (cabeçalho de cada bloco). */
@@ -58,6 +71,7 @@ function acharColunasNome(linha) {
  */
 export function parseAbaMensal(linhas, mes, ano) {
   const entradas = [];
+  const salarios = [];
   let i = 0;
   while (i < linhas.length) {
     const linhaAtual = linhas[i] ?? [];
@@ -66,6 +80,9 @@ export function parseAbaMensal(linhas, mes, ano) {
       const textoBloco = linhaAtual.map(textoCelula).find((t) => /CONTROLE DE GASTOS/i.test(t)) ?? '';
       const match = textoBloco.match(/-\s*([A-ZÀ-Ú]+)/i);
       const pessoa = match ? match[1].toUpperCase() : 'DESCONHECIDO';
+
+      const salario = extrairSalario(textoBloco);
+      if (salario) salarios.push({ pessoa, valor: salario, mes, ano });
 
       let j = i + 1;
       let colunasNome = [];
@@ -144,5 +161,49 @@ export function parseAbaMensal(linhas, mes, ano) {
       i++;
     }
   }
-  return entradas;
+  return { entradas, salarios };
+}
+
+const MARCADORES_FINAIS = ['total geral', 'total com taxas e frete'];
+
+/**
+ * Varre TODAS as abas (inclusive as especiais) atrás de blocos soltos de compras de
+ * colecionáveis ("Commander AS", cards avulsos...). Esses blocos são copiados de mês a mês
+ * ao duplicar a aba — os mesmos valores aparecem repetidos dezenas de vezes — então cada
+ * valor único é importado uma única vez (na primeira aba em que aparece), não uma vez por mês.
+ */
+export function extrairTotaisSoltos(wb, XLSX) {
+  const vistos = new Set();
+  const resultado = [];
+
+  for (const nomeAba of wb.SheetNames) {
+    const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header: 1, defval: null });
+    const refMes = parseNomeAba(nomeAba);
+
+    linhas.forEach((linha) => {
+      linha.forEach((v, j) => {
+        const rotulo = textoCelula(v).toLowerCase();
+        if (!MARCADORES_FINAIS.includes(rotulo)) return;
+        let valor = null;
+        for (let k = j + 1; k < linha.length; k++) {
+          if (typeof linha[k] === 'number') {
+            valor = linha[k];
+            break;
+          }
+        }
+        if (valor === null || valor <= 0) return;
+        const chave = Math.round(valor * 100);
+        if (vistos.has(chave)) return;
+        vistos.add(chave);
+        resultado.push({
+          valor,
+          mes: refMes?.mes ?? null,
+          ano: refMes?.ano ?? null,
+          origemAba: nomeAba,
+        });
+      });
+    });
+  }
+
+  return resultado;
 }
