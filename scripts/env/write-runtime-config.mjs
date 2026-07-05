@@ -31,6 +31,7 @@ carregarDotEnv();
 
 const supabaseUrl = process.env.SUPABASE_URL ?? '';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? '';
+const allowedGoogleEmail = process.env.ALLOWED_GOOGLE_EMAIL ?? '';
 
 const outDir = join(root, 'src', 'core', 'config');
 const outFile = join(outDir, 'runtime-config.generated.ts');
@@ -39,9 +40,11 @@ mkdirSync(outDir, { recursive: true });
 writeFileSync(
   outFile,
   `// Arquivo gerado por scripts/env/write-runtime-config.mjs a partir das variáveis de\n` +
-    `// ambiente SUPABASE_URL/SUPABASE_ANON_KEY — não editar manualmente, não vai pro Git.\n` +
+    `// ambiente SUPABASE_URL/SUPABASE_ANON_KEY/ALLOWED_GOOGLE_EMAIL — não editar manualmente,\n` +
+    `// não vai pro Git.\n` +
     `export const SUPABASE_URL = ${JSON.stringify(supabaseUrl)};\n` +
-    `export const SUPABASE_ANON_KEY = ${JSON.stringify(supabaseAnonKey)};\n`,
+    `export const SUPABASE_ANON_KEY = ${JSON.stringify(supabaseAnonKey)};\n` +
+    `export const ALLOWED_GOOGLE_EMAIL = ${JSON.stringify(allowedGoogleEmail)};\n`,
 );
 
 console.log(

@@ -167,13 +167,18 @@ create table if not exists filtro_salvo (
 -- Segurança: a chave pública (anon key) fica embutida no site publicado, então
 -- qualquer um que a encontrar poderia ler/escrever direto no banco se não
 -- houvesse trava nenhuma. Como o app não tem cadastro por pessoa (é o uso
--- combinado da família com um único login compartilhado), a regra é simples:
--- só usuário autenticado (que fez login) pode ler ou escrever qualquer linha.
+-- combinado da família com um único login compartilhado, ou "Entrar com Google" travado a um
+-- e-mail), a regra é: só o dono (o e-mail abaixo) pode ler ou escrever qualquer linha.
+--
+-- TROQUE o e-mail abaixo pelo seu antes de rodar (é o mesmo que você usa pra entrar no app).
+-- Se já rodou este arquivo antes com "using (true)", pode rodar de novo com segurança — ele
+-- substitui a política antiga pela nova.
 -- ---------------------------------------------------------------------------
 
 do $$
 declare
   t text;
+  email_permitido text := 'alexsandrodevelop@gmail.com'; -- troque pelo seu e-mail
 begin
   for t in select unnest(array[
     'responsavel', 'conta', 'cartao', 'categoria', 'etiqueta', 'recorrencia',
@@ -185,8 +190,8 @@ begin
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists "familia_acesso_total" on %I', t);
     execute format(
-      'create policy "familia_acesso_total" on %I for all to authenticated using (true) with check (true)',
-      t
+      'create policy "familia_acesso_total" on %I for all to authenticated using ((auth.jwt() ->> ''email'') = %L) with check ((auth.jwt() ->> ''email'') = %L)',
+      t, email_permitido, email_permitido
     );
   end loop;
 end $$;
