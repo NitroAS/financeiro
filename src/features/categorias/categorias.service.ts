@@ -22,6 +22,11 @@ export class CategoriasService {
     await this.carregar();
   }
 
+  async atualizar(id: string, valores: Partial<NovaCategoria>): Promise<void> {
+    await this.dbService.db.update(categoria).set(valores).where(eq(categoria.id, id));
+    await this.carregar();
+  }
+
   async remover(id: string): Promise<void> {
     await this.dbService.db.delete(categoria).where(eq(categoria.id, id));
     await this.carregar();

@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import { ButtonDirective } from '../../shared/ui/button.directive';
 import { InputDirective } from '../../shared/ui/input.directive';
 import { SelectDirective } from '../../shared/ui/select.directive';
 import { zodValidator } from '../../shared/utils/zod-validator';
-import { CategoriasService } from './categorias.service';
+import { CategoriasService, type Categoria } from './categorias.service';
 
 const categoriaSchema = z.object({
   nome: z.string().min(1, 'Informe um nome'),
@@ -31,6 +31,15 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A',
       </div>
 
       <app-card>
+        @if (editandoId()) {
+          <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+            <span class="flex items-center gap-2">
+              <lucide-angular name="pencil" [size]="14" />
+              Editando categoria
+            </span>
+            <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+          </div>
+        }
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-wrap items-end gap-3">
           <div class="flex min-w-[160px] flex-1 flex-col gap-1">
             <label class="text-xs font-medium text-muted-foreground">Nome</label>
@@ -60,8 +69,8 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A',
             </div>
           </div>
           <button appButton type="submit" [disabled]="form.invalid">
-            <lucide-angular name="plus" [size]="16" />
-            Adicionar
+            <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
+            {{ editandoId() ? 'Salvar alterações' : 'Adicionar' }}
           </button>
         </form>
       </app-card>
@@ -75,6 +84,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A',
                 <span class="h-2.5 w-2.5 rounded-full" [style.background]="c.cor"></span>
                 <span class="text-sm">{{ c.nome }}</span>
               </div>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(c)" aria-label="Editar">
+                <lucide-angular name="pencil" [size]="15" />
+              </button>
               <button appButton variant="ghost" size="icon" type="button" (click)="remover(c.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
@@ -89,6 +101,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A',
                 <span class="h-2.5 w-2.5 rounded-full" [style.background]="c.cor"></span>
                 <span class="text-sm">{{ c.nome }}</span>
               </div>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(c)" aria-label="Editar">
+                <lucide-angular name="pencil" [size]="15" />
+              </button>
               <button appButton variant="ghost" size="icon" type="button" (click)="remover(c.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
@@ -103,6 +118,7 @@ export class CategoriasComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   readonly categoriasService = inject(CategoriasService);
   readonly cores = CORES;
+  readonly editandoId = signal<string | null>(null);
 
   readonly despesas = computed(() => this.categoriasService.categorias().filter((c) => c.tipo === 'despesa'));
   readonly receitas = computed(() => this.categoriasService.categorias().filter((c) => c.tipo === 'receita'));
@@ -123,7 +139,24 @@ export class CategoriasComponent implements OnInit {
 
   async salvar(): Promise<void> {
     if (this.form.invalid) return;
+    const editandoId = this.editandoId();
+    if (editandoId) {
+      await this.categoriasService.atualizar(editandoId, this.form.getRawValue());
+      this.cancelarEdicao();
+      return;
+    }
     await this.categoriasService.criar(this.form.getRawValue());
+    this.form.reset({ nome: '', tipo: 'despesa', cor: CORES[0], icone: 'tag' });
+  }
+
+  editar(c: Categoria): void {
+    this.editandoId.set(c.id);
+    this.form.patchValue({ nome: c.nome, tipo: c.tipo, cor: c.cor, icone: c.icone });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  cancelarEdicao(): void {
+    this.editandoId.set(null);
     this.form.reset({ nome: '', tipo: 'despesa', cor: CORES[0], icone: 'tag' });
   }
 

@@ -61,6 +61,11 @@ export class CartoesService {
     await this.carregar();
   }
 
+  async atualizar(id: string, valores: Partial<NovoCartao>): Promise<void> {
+    await this.dbService.db.update(cartao).set(valores).where(eq(cartao.id, id));
+    await this.carregar();
+  }
+
   async remover(id: string): Promise<void> {
     await this.dbService.db.delete(cartao).where(eq(cartao.id, id));
     await this.carregar();

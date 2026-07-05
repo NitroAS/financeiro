@@ -51,6 +51,11 @@ export class MetasService {
     await this.carregar();
   }
 
+  async atualizar(id: string, valores: Partial<NovaMeta>): Promise<void> {
+    await this.dbService.db.update(meta).set(valores).where(eq(meta.id, id));
+    await this.carregar();
+  }
+
   async registrarMovimento(metaId: string, tipo: 'aporte' | 'resgate', valor: number): Promise<void> {
     const db = this.dbService.db;
     await db.insert(metaMovimento).values({ metaId, tipo, valor, data: new Date().toISOString() });

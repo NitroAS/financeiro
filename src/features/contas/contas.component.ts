@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -10,7 +10,7 @@ import { InputDirective } from '../../shared/ui/input.directive';
 import { SelectDirective } from '../../shared/ui/select.directive';
 import { zodValidator } from '../../shared/utils/zod-validator';
 import { CONTA_ICONES, CONTA_TIPOS, RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
-import { ContasService } from './contas.service';
+import { ContasService, type Conta } from './contas.service';
 
 const contaSchema = z.object({
   nome: z.string().min(1, 'Informe um nome'),
@@ -45,6 +45,15 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A']
       </div>
 
       <app-card>
+        @if (editandoId()) {
+          <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+            <span class="flex items-center gap-2">
+              <lucide-angular name="pencil" [size]="14" />
+              Editando conta
+            </span>
+            <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+          </div>
+        }
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-wrap items-end gap-3">
           <div class="flex min-w-[160px] flex-1 flex-col gap-1">
             <label class="text-xs font-medium text-muted-foreground">Nome</label>
@@ -98,8 +107,8 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A']
           </div>
 
           <button appButton type="submit" [disabled]="form.invalid">
-            <lucide-angular name="plus" [size]="16" />
-            Adicionar
+            <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
+            {{ editandoId() ? 'Salvar alterações' : 'Adicionar' }}
           </button>
         </form>
       </app-card>
@@ -128,6 +137,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A']
                 </span>
               }
               <span class="tabular-nums text-sm font-medium">{{ c.saldoInicial | number: '1.2-2' }}</span>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(c)" aria-label="Editar conta">
+                <lucide-angular name="pencil" [size]="16" />
+              </button>
               <button
                 appButton
                 variant="ghost"
@@ -154,6 +166,7 @@ export class ContasComponent implements OnInit {
   readonly tipos = CONTA_TIPOS;
   readonly cores = CORES;
   readonly responsaveis = RESPONSAVEIS_PADRAO;
+  readonly editandoId = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -175,11 +188,50 @@ export class ContasComponent implements OnInit {
   async salvar(): Promise<void> {
     if (this.form.invalid) return;
     const valores = this.form.getRawValue();
+    const editandoId = this.editandoId();
+
+    if (editandoId) {
+      await this.contasService.atualizar(editandoId, {
+        ...valores,
+        instituicao: valores.instituicao || undefined,
+        responsavelId: valores.responsavelId || undefined,
+      });
+      this.cancelarEdicao();
+      return;
+    }
+
     await this.contasService.criar({
       ...valores,
       instituicao: valores.instituicao || undefined,
       responsavelId: valores.responsavelId || undefined,
     });
+    this.form.reset({
+      nome: '',
+      tipo: 'corrente',
+      instituicao: '',
+      saldoInicial: 0,
+      cor: CORES[0],
+      icone: CONTA_ICONES[0],
+      responsavelId: '',
+    });
+  }
+
+  editar(c: Conta): void {
+    this.editandoId.set(c.id);
+    this.form.patchValue({
+      nome: c.nome,
+      tipo: c.tipo as (typeof CONTA_TIPOS)[number],
+      instituicao: c.instituicao ?? '',
+      saldoInicial: c.saldoInicial,
+      cor: c.cor,
+      icone: c.icone,
+      responsavelId: c.responsavelId ?? '',
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  cancelarEdicao(): void {
+    this.editandoId.set(null);
     this.form.reset({
       nome: '',
       tipo: 'corrente',

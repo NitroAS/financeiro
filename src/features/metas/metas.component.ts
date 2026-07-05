@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -7,7 +7,7 @@ import { BadgeComponent } from '../../shared/ui/badge.component';
 import { ButtonDirective } from '../../shared/ui/button.directive';
 import { InputDirective } from '../../shared/ui/input.directive';
 import { ProgressComponent } from '../../shared/ui/progress.component';
-import { MetasService } from './metas.service';
+import { MetasService, type MetaComPrevisao } from './metas.service';
 
 const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
 
@@ -32,6 +32,15 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
       </div>
 
       <app-card>
+        @if (editandoId()) {
+          <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+            <span class="flex items-center gap-2">
+              <lucide-angular name="pencil" [size]="14" />
+              Editando meta
+            </span>
+            <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+          </div>
+        }
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-wrap items-end gap-3">
           <div class="flex min-w-[160px] flex-1 flex-col gap-1">
             <label class="text-xs font-medium text-muted-foreground">Nome</label>
@@ -46,8 +55,8 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
             <input appInput type="date" formControlName="dataAlvo" />
           </div>
           <button appButton type="submit" [disabled]="form.invalid">
-            <lucide-angular name="plus" [size]="16" />
-            Criar meta
+            <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
+            {{ editandoId() ? 'Salvar alterações' : 'Criar meta' }}
           </button>
         </form>
       </app-card>
@@ -60,6 +69,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
                 <span class="h-2.5 w-2.5 rounded-full" [style.background]="m.cor"></span>
                 <span class="text-sm font-medium">{{ m.nome }}</span>
               </div>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(m)" aria-label="Editar">
+                <lucide-angular name="pencil" [size]="15" />
+              </button>
               <button appButton variant="ghost" size="icon" type="button" (click)="remover(m.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
@@ -95,6 +107,7 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
 export class MetasComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   readonly metasService = inject(MetasService);
+  readonly editandoId = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', Validators.required],
@@ -109,6 +122,18 @@ export class MetasComponent implements OnInit {
   async salvar(): Promise<void> {
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
+    const editandoId = this.editandoId();
+
+    if (editandoId) {
+      await this.metasService.atualizar(editandoId, {
+        nome: v.nome,
+        valorAlvo: v.valorAlvo,
+        dataAlvo: v.dataAlvo || undefined,
+      });
+      this.cancelarEdicao();
+      return;
+    }
+
     const cor = CORES[this.metasService.metas().length % CORES.length];
     await this.metasService.criar({
       nome: v.nome,
@@ -117,6 +142,17 @@ export class MetasComponent implements OnInit {
       cor,
       icone: 'target',
     });
+    this.form.reset({ nome: '', valorAlvo: 1000, dataAlvo: '' });
+  }
+
+  editar(m: MetaComPrevisao): void {
+    this.editandoId.set(m.id);
+    this.form.patchValue({ nome: m.nome, valorAlvo: m.valorAlvo, dataAlvo: m.dataAlvo ?? '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  cancelarEdicao(): void {
+    this.editandoId.set(null);
     this.form.reset({ nome: '', valorAlvo: 1000, dataAlvo: '' });
   }
 

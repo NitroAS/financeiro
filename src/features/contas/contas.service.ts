@@ -28,6 +28,11 @@ export class ContasService {
     await this.carregar();
   }
 
+  async atualizar(id: string, valores: Partial<NovaConta>): Promise<void> {
+    await this.dbService.db.update(conta).set(valores).where(eq(conta.id, id));
+    await this.carregar();
+  }
+
   async remover(id: string): Promise<void> {
     await this.dbService.db.update(conta).set({ arquivada: true }).where(eq(conta.id, id));
     await this.carregar();

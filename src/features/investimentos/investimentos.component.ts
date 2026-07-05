@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { LucideAngularModule } from 'lucide-angular';
@@ -7,7 +7,7 @@ import { BadgeComponent } from '../../shared/ui/badge.component';
 import { ButtonDirective } from '../../shared/ui/button.directive';
 import { InputDirective } from '../../shared/ui/input.directive';
 import { SelectDirective } from '../../shared/ui/select.directive';
-import { InvestimentosService } from './investimentos.service';
+import { InvestimentosService, type InvestimentoComSaldo } from './investimentos.service';
 
 const TIPOS = ['CDB', 'Tesouro', 'ETF', 'Acao', 'Fundo', 'Cripto'] as const;
 
@@ -47,6 +47,15 @@ const TIPOS = ['CDB', 'Tesouro', 'ETF', 'Acao', 'Fundo', 'Cripto'] as const;
       </div>
 
       <app-card>
+        @if (editandoId()) {
+          <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+            <span class="flex items-center gap-2">
+              <lucide-angular name="pencil" [size]="14" />
+              Editando investimento
+            </span>
+            <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+          </div>
+        }
         <form [formGroup]="form" (ngSubmit)="salvar()" class="flex flex-wrap items-end gap-3">
           <div class="flex min-w-[160px] flex-1 flex-col gap-1">
             <label class="text-xs font-medium text-muted-foreground">Nome</label>
@@ -65,8 +74,8 @@ const TIPOS = ['CDB', 'Tesouro', 'ETF', 'Acao', 'Fundo', 'Cripto'] as const;
             <input appInput formControlName="instituicao" placeholder="Opcional" />
           </div>
           <button appButton type="submit" [disabled]="form.invalid">
-            <lucide-angular name="plus" [size]="16" />
-            Adicionar
+            <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
+            {{ editandoId() ? 'Salvar alterações' : 'Adicionar' }}
           </button>
         </form>
       </app-card>
@@ -79,6 +88,9 @@ const TIPOS = ['CDB', 'Tesouro', 'ETF', 'Acao', 'Fundo', 'Cripto'] as const;
                 <div class="text-sm font-medium">{{ i.nome }}</div>
                 <div class="text-xs text-muted-foreground">{{ i.tipo }}{{ i.instituicao ? ' · ' + i.instituicao : '' }}</div>
               </div>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(i)" aria-label="Editar">
+                <lucide-angular name="pencil" [size]="15" />
+              </button>
               <button appButton variant="ghost" size="icon" type="button" (click)="remover(i.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
@@ -111,6 +123,7 @@ export class InvestimentosComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   readonly investimentosService = inject(InvestimentosService);
   readonly tipos = TIPOS;
+  readonly editandoId = signal<string | null>(null);
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', Validators.required],
@@ -125,7 +138,26 @@ export class InvestimentosComponent implements OnInit {
   async salvar(): Promise<void> {
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
+    const editandoId = this.editandoId();
+
+    if (editandoId) {
+      await this.investimentosService.atualizar(editandoId, { ...v, instituicao: v.instituicao || undefined });
+      this.cancelarEdicao();
+      return;
+    }
+
     await this.investimentosService.criar({ ...v, instituicao: v.instituicao || undefined });
+    this.form.reset({ nome: '', tipo: 'CDB', instituicao: '' });
+  }
+
+  editar(i: InvestimentoComSaldo): void {
+    this.editandoId.set(i.id);
+    this.form.patchValue({ nome: i.nome, tipo: i.tipo as (typeof TIPOS)[number], instituicao: i.instituicao ?? '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  cancelarEdicao(): void {
+    this.editandoId.set(null);
     this.form.reset({ nome: '', tipo: 'CDB', instituicao: '' });
   }
 

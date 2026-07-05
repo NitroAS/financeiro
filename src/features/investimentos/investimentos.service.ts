@@ -54,6 +54,11 @@ export class InvestimentosService {
     await this.carregar();
   }
 
+  async atualizar(id: string, valores: Partial<NovoInvestimento>): Promise<void> {
+    await this.dbService.db.update(investimento).set(valores).where(eq(investimento.id, id));
+    await this.carregar();
+  }
+
   async registrarMovimento(investimentoId: string, tipo: 'aporte' | 'resgate' | 'rendimento', valor: number): Promise<void> {
     await this.dbService.db
       .insert(investimentoMovimento)
