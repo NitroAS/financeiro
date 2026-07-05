@@ -45,6 +45,7 @@ import {
   Star,
   Copy,
   RotateCcw,
+  Menu,
 } from 'lucide-angular';
 
 import { routes } from './app.routes';
@@ -99,6 +100,7 @@ export const appConfig: ApplicationConfig = {
         Star,
         Copy,
         RotateCcw,
+        Menu,
       }),
     ), provideServiceWorker('ngsw-worker.js', {
             enabled: !isDevMode(),
