@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { and, eq, gte, isNull, lt } from 'drizzle-orm';
 import { DbService } from '../../core/db/db.service';
 import { categoria, lancamento } from '../../core/db/schema';
+import { RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
 import type { Lancamento } from '../lancamentos/lancamentos.service';
 
 export interface FiltroRelatorio {
@@ -9,10 +10,18 @@ export interface FiltroRelatorio {
   categoriaId?: string;
   contaId?: string;
   cartaoId?: string;
+  responsavelId?: string;
 }
 
 export interface FatiaCategoria {
   categoriaId: string;
+  nome: string;
+  cor: string;
+  valor: number;
+}
+
+export interface FatiaResponsavel {
+  responsavelId: string;
   nome: string;
   cor: string;
   valor: number;
@@ -30,6 +39,7 @@ export class RelatoriosService {
 
   readonly lancamentos = signal<Lancamento[]>([]);
   readonly gastosPorCategoria = signal<FatiaCategoria[]>([]);
+  readonly gastosPorResponsavel = signal<FatiaResponsavel[]>([]);
   readonly fluxoCaixa = signal<PontoFluxoCaixa[]>([]);
 
   async carregar(filtro: FiltroRelatorio): Promise<void> {
@@ -42,6 +52,7 @@ export class RelatoriosService {
     if (filtro.categoriaId) condicoes.push(eq(lancamento.categoriaId, filtro.categoriaId));
     if (filtro.contaId) condicoes.push(eq(lancamento.contaId, filtro.contaId));
     if (filtro.cartaoId) condicoes.push(eq(lancamento.cartaoId, filtro.cartaoId));
+    if (filtro.responsavelId) condicoes.push(eq(lancamento.responsavelId, filtro.responsavelId));
 
     const rows = await db.select().from(lancamento).where(and(...condicoes));
     this.lancamentos.set(rows);
@@ -59,6 +70,19 @@ export class RelatoriosService {
       })
       .sort((a, b) => b.valor - a.valor);
     this.gastosPorCategoria.set(fatias);
+
+    const porResponsavel = new Map<string, number>();
+    for (const l of rows) {
+      if (l.tipo !== 'despesa' || !l.responsavelId) continue;
+      porResponsavel.set(l.responsavelId, (porResponsavel.get(l.responsavelId) ?? 0) + l.valor);
+    }
+    const fatiasResponsavel = Array.from(porResponsavel.entries())
+      .map(([responsavelId, valor]) => {
+        const r = RESPONSAVEIS_PADRAO.find((resp) => resp.id === responsavelId);
+        return { responsavelId, nome: r?.nome ?? 'Sem responsável', cor: r?.cor ?? '#8A8698', valor };
+      })
+      .sort((a, b) => b.valor - a.valor);
+    this.gastosPorResponsavel.set(fatiasResponsavel);
 
     const pontos: PontoFluxoCaixa[] = [];
     for (let i = filtro.meses - 1; i >= 0; i--) {

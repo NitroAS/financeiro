@@ -117,6 +117,16 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A']
               </div>
             </div>
             <div class="flex items-center gap-4">
+              @if (responsavelPor(c.responsavelId); as resp) {
+                <span
+                  class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                  [style.backgroundColor]="resp.cor + '1a'"
+                  [style.color]="resp.cor"
+                >
+                  <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
+                  {{ resp.nome }}
+                </span>
+              }
               <span class="tabular-nums text-sm font-medium">{{ c.saldoInicial | number: '1.2-2' }}</span>
               <button
                 appButton
@@ -183,5 +193,9 @@ export class ContasComponent implements OnInit {
 
   async remover(id: string): Promise<void> {
     await this.contasService.remover(id);
+  }
+
+  responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {
+    return id ? this.responsaveis.find((r) => r.id === id) : undefined;
   }
 }

@@ -9,7 +9,7 @@ import { ButtonDirective } from '../../shared/ui/button.directive';
 import { InputDirective } from '../../shared/ui/input.directive';
 import { SelectDirective } from '../../shared/ui/select.directive';
 import { zodValidator } from '../../shared/utils/zod-validator';
-import { CARTAO_BANDEIRAS } from '../../shared/constants/seed-data';
+import { CARTAO_BANDEIRAS, RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
 import { ContasService } from '../contas/contas.service';
 import { CartoesService } from './cartoes.service';
 import { LancamentosService } from '../lancamentos/lancamentos.service';
@@ -23,6 +23,7 @@ const cartaoSchema = z.object({
   diaFechamento: z.number().int().min(1).max(31),
   diaVencimento: z.number().int().min(1).max(31),
   contaPagamentoId: z.string().optional(),
+  responsavelId: z.string().optional(),
   cor: z.string().min(1),
   icone: z.string().min(1),
 });
@@ -89,6 +90,15 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
               }
             </select>
           </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-muted-foreground">Responsável</label>
+            <select appSelect formControlName="responsavelId">
+              <option value="">—</option>
+              @for (r of responsaveis; track r.id) {
+                <option [value]="r.id">{{ r.nome }}</option>
+              }
+            </select>
+          </div>
           <button appButton type="submit" [disabled]="form.invalid">
             <lucide-angular name="plus" [size]="16" />
             Adicionar
@@ -108,7 +118,19 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
             </div>
-            <div class="text-xs text-muted-foreground">{{ c.banco }} · {{ c.bandeira }}</div>
+            <div class="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{{ c.banco }} · {{ c.bandeira }}</span>
+              @if (responsavelPor(c.responsavelId); as resp) {
+                <span
+                  class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                  [style.backgroundColor]="resp.cor + '1a'"
+                  [style.color]="resp.cor"
+                >
+                  <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
+                  {{ resp.nome }}
+                </span>
+              }
+            </div>
 
             @if (cartoesService.resumos()[c.id]; as resumo) {
               <div class="flex flex-col gap-1">
@@ -164,6 +186,7 @@ export class CartoesComponent implements OnInit {
   readonly contasService = inject(ContasService);
   private readonly lancamentosService = inject(LancamentosService);
   readonly bandeiras = CARTAO_BANDEIRAS;
+  readonly responsaveis = RESPONSAVEIS_PADRAO;
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -174,6 +197,7 @@ export class CartoesComponent implements OnInit {
       diaFechamento: [1],
       diaVencimento: [10],
       contaPagamentoId: [''],
+      responsavelId: [''],
       cor: [CORES[0]],
       icone: ['credit-card'],
     },
@@ -191,6 +215,7 @@ export class CartoesComponent implements OnInit {
     await this.cartoesService.criar({
       ...valores,
       contaPagamentoId: valores.contaPagamentoId || undefined,
+      responsavelId: valores.responsavelId || undefined,
     });
     this.form.reset({
       nome: '',
@@ -200,6 +225,7 @@ export class CartoesComponent implements OnInit {
       diaFechamento: 1,
       diaVencimento: 10,
       contaPagamentoId: '',
+      responsavelId: '',
       cor: CORES[0],
       icone: 'credit-card',
     });
@@ -207,6 +233,10 @@ export class CartoesComponent implements OnInit {
 
   async remover(id: string): Promise<void> {
     await this.cartoesService.remover(id);
+  }
+
+  responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {
+    return id ? this.responsaveis.find((r) => r.id === id) : undefined;
   }
 
   async quitar(lancamentoId: string): Promise<void> {

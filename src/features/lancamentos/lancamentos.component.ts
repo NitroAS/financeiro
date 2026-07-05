@@ -55,9 +55,9 @@ function parseDataLocal(iso: string): Date {
   ],
   template: `
     <div class="flex flex-col gap-4">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <h1 class="text-xl font-semibold tracking-tight">Lançamentos</h1>
-        <div class="flex items-center gap-1">
+        <div class="flex flex-wrap items-center gap-1">
           <button appButton variant="ghost" size="icon" type="button" (click)="mesAnterior()" aria-label="Mês anterior">
             <lucide-angular name="chevron-left" [size]="16" />
           </button>
@@ -65,6 +65,20 @@ function parseDataLocal(iso: string): Date {
           <button appButton variant="ghost" size="icon" type="button" (click)="proximoMes()" aria-label="Próximo mês">
             <lucide-angular name="chevron-right" [size]="16" />
           </button>
+
+          <select
+            appSelect
+            class="ml-2 w-40"
+            aria-label="Filtrar por responsável"
+            [value]="lancamentosService.filtroResponsavelId()"
+            (change)="filtrarPorResponsavel($event)"
+          >
+            <option value="">Todos os responsáveis</option>
+            @for (r of responsaveis; track r.id) {
+              <option [value]="r.id">{{ r.nome }}</option>
+            }
+          </select>
+
           <button appButton variant="outline" size="sm" type="button" class="ml-2" (click)="alternarLixeira()">
             <lucide-angular name="trash-2" [size]="14" />
             Lixeira
@@ -207,6 +221,16 @@ function parseDataLocal(iso: string): Date {
               </div>
             </div>
             <div class="flex items-center gap-3">
+              @if (responsavelPor(l.responsavelId); as resp) {
+                <span
+                  class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                  [style.backgroundColor]="resp.cor + '1a'"
+                  [style.color]="resp.cor"
+                >
+                  <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
+                  {{ resp.nome }}
+                </span>
+              }
               <app-badge [variant]="l.status === 'pago' ? 'success' : 'warning'">{{ l.status }}</app-badge>
               <span class="tabular-nums text-sm font-medium" [class]="l.tipo === 'receita' ? 'text-success' : ''">
                 {{ l.tipo === 'receita' ? '+' : '-' }}{{ l.valor | number: '1.2-2' }}
@@ -292,6 +316,15 @@ export class LancamentosComponent implements OnInit {
     const { mes, ano } = this.lancamentosService.mesReferencia();
     const seguinte = addMonthsClamped(new Date(ano, mes, 1), 1);
     this.lancamentosService.irParaMes(seguinte.getMonth(), seguinte.getFullYear());
+  }
+
+  filtrarPorResponsavel(event: Event): void {
+    const responsavelId = (event.target as HTMLSelectElement).value;
+    this.lancamentosService.filtrarPorResponsavel(responsavelId);
+  }
+
+  responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {
+    return id ? this.responsaveis.find((r) => r.id === id) : undefined;
   }
 
   formatarData(iso: string): string {

@@ -23,7 +23,14 @@ const RESPONSAVEIS_PADRAO = [
   { id: 'resp-alex', nome: 'Alex', cor: '#2AA9A0', icone: 'user' },
   { id: 'resp-nykolly', nome: 'Nykolly', cor: '#E0A03C', icone: 'user' },
 ];
-const PESSOA_PARA_RESPONSAVEL = { AS: 'resp-as', CLEUSA: 'resp-cleusa', ALEX: 'resp-alex', NYKOLLY: 'resp-nykolly' };
+// Algumas abas escrevem o nome completo em vez do apelido de sempre — mesma pessoa, chave diferente.
+const PESSOA_PARA_RESPONSAVEL = {
+  AS: 'resp-as',
+  ALEXSANDRO: 'resp-as',
+  CLEUSA: 'resp-cleusa',
+  ALEX: 'resp-alex',
+  NYKOLLY: 'resp-nykolly',
+};
 
 const CATEGORIAS_PADRAO = [
   { id: 'cat-moradia', nome: 'Moradia', tipo: 'despesa', cor: '#6C4CE0', icone: 'home' },

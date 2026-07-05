@@ -28,16 +28,21 @@ export class LancamentosService {
   readonly lancamentos = signal<Lancamento[]>([]);
   readonly lixeira = signal<Lancamento[]>([]);
   readonly mesReferencia = signal<{ mes: number; ano: number }>(mesAtual());
+  readonly filtroResponsavelId = signal<string>('');
 
   async carregar(): Promise<void> {
     const { mes, ano } = this.mesReferencia();
     const inicio = new Date(ano, mes, 1).toISOString();
     const fim = new Date(ano, mes + 1, 1).toISOString();
+    const responsavelId = this.filtroResponsavelId();
+
+    const condicoes = [isNull(lancamento.deletedAt), gte(lancamento.data, inicio), lt(lancamento.data, fim)];
+    if (responsavelId) condicoes.push(eq(lancamento.responsavelId, responsavelId));
 
     const rows = await this.dbService.db
       .select()
       .from(lancamento)
-      .where(and(isNull(lancamento.deletedAt), gte(lancamento.data, inicio), lt(lancamento.data, fim)))
+      .where(and(...condicoes))
       .orderBy(desc(lancamento.data));
 
     this.lancamentos.set(rows);
@@ -45,6 +50,11 @@ export class LancamentosService {
 
   irParaMes(mes: number, ano: number): void {
     this.mesReferencia.set({ mes, ano });
+    void this.carregar();
+  }
+
+  filtrarPorResponsavel(responsavelId: string): void {
+    this.filtroResponsavelId.set(responsavelId);
     void this.carregar();
   }
 

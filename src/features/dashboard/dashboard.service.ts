@@ -2,7 +2,16 @@ import { Injectable, inject, signal } from '@angular/core';
 import { and, desc, eq, gte, isNull, lt } from 'drizzle-orm';
 import { DbService } from '../../core/db/db.service';
 import { conta, lancamento } from '../../core/db/schema';
+import { RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
 import type { Lancamento } from '../lancamentos/lancamentos.service';
+
+export interface ResumoPorResponsavel {
+  responsavelId: string;
+  nome: string;
+  cor: string;
+  receitas: number;
+  despesas: number;
+}
 
 export interface ResumoDashboard {
   saldoContas: number;
@@ -12,6 +21,7 @@ export interface ResumoDashboard {
   contasVencidas: Lancamento[];
   proximasContas: Lancamento[];
   ultimosLancamentos: Lancamento[];
+  porResponsavel: ResumoPorResponsavel[];
 }
 
 const RESUMO_VAZIO: ResumoDashboard = {
@@ -22,6 +32,7 @@ const RESUMO_VAZIO: ResumoDashboard = {
   contasVencidas: [],
   proximasContas: [],
   ultimosLancamentos: [],
+  porResponsavel: [],
 };
 
 @Injectable({ providedIn: 'root' })
@@ -56,6 +67,17 @@ export class DashboardService {
     const receitasMes = lancamentosMes.filter((l) => l.tipo === 'receita').reduce((acc, l) => acc + l.valor, 0);
     const despesasMes = lancamentosMes.filter((l) => l.tipo === 'despesa').reduce((acc, l) => acc + l.valor, 0);
 
+    const porResponsavel = RESPONSAVEIS_PADRAO.map((r) => {
+      const doResponsavel = lancamentosMes.filter((l) => l.responsavelId === r.id);
+      return {
+        responsavelId: r.id,
+        nome: r.nome,
+        cor: r.cor,
+        receitas: doResponsavel.filter((l) => l.tipo === 'receita').reduce((acc, l) => acc + l.valor, 0),
+        despesas: doResponsavel.filter((l) => l.tipo === 'despesa').reduce((acc, l) => acc + l.valor, 0),
+      };
+    }).filter((r) => r.receitas > 0 || r.despesas > 0);
+
     this.resumo.set({
       saldoContas: contas.reduce((acc, c) => acc + c.saldoInicial, 0),
       receitasMes,
@@ -64,6 +86,7 @@ export class DashboardService {
       contasVencidas: pendentes.filter((l) => (l.vencimento ?? l.data) < hojeIso),
       proximasContas: pendentes.filter((l) => (l.vencimento ?? l.data) >= hojeIso).slice(0, 5),
       ultimosLancamentos: ultimos,
+      porResponsavel,
     });
   }
 }

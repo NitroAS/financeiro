@@ -7,8 +7,10 @@ import { categorizar } from '../../shared/xlsx-import/categorizar';
 
 const ABAS_ESPECIAIS = new Set(['Viagem SP', 'Cart. Mami Agosto 25']);
 
+// Algumas abas escrevem o nome completo em vez do apelido de sempre — mesma pessoa, chave diferente.
 const PESSOA_PARA_RESPONSAVEL: Record<string, string> = {
   AS: 'resp-as',
+  ALEXSANDRO: 'resp-as',
   CLEUSA: 'resp-cleusa',
   ALEX: 'resp-alex',
   NYKOLLY: 'resp-nykolly',

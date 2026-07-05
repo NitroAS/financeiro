@@ -10,6 +10,7 @@ import { SelectDirective } from '../../shared/ui/select.directive';
 import { ContasService } from '../contas/contas.service';
 import { CategoriasService } from '../categorias/categorias.service';
 import { CartoesService } from '../cartoes/cartoes.service';
+import { RESPONSAVEIS_PADRAO } from '../../shared/constants/seed-data';
 import { RelatoriosService } from './relatorios.service';
 import { exportarCsv, exportarExcel, type LinhaExportavel } from '../../shared/utils/exportar';
 
@@ -80,6 +81,15 @@ import { exportarCsv, exportarExcel, type LinhaExportavel } from '../../shared/u
               }
             </select>
           </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-muted-foreground">Responsável</label>
+            <select appSelect [(ngModel)]="responsavelId" (ngModelChange)="recarregar()">
+              <option [ngValue]="undefined">Todos</option>
+              @for (r of responsaveis; track r.id) {
+                <option [ngValue]="r.id">{{ r.nome }}</option>
+              }
+            </select>
+          </div>
         </div>
       </app-card>
 
@@ -101,6 +111,22 @@ import { exportarCsv, exportarExcel, type LinhaExportavel } from '../../shared/u
         </app-card>
 
         <app-card>
+          <h2 class="mb-2 text-sm font-semibold">Gastos por responsável</h2>
+          @if (donutResponsavelOptions(); as opts) {
+            <apx-chart
+              [series]="opts.series!"
+              [chart]="opts.chart!"
+              [labels]="opts.labels!"
+              [colors]="opts.colors ?? []"
+              [legend]="opts.legend!"
+              [dataLabels]="opts.dataLabels!"
+            />
+          } @else {
+            <p class="text-sm text-muted-foreground">Sem despesas no período.</p>
+          }
+        </app-card>
+
+        <app-card class="lg:col-span-2">
           <h2 class="mb-2 text-sm font-semibold">Fluxo de caixa</h2>
           @if (carregado()) {
             <apx-chart
@@ -141,13 +167,29 @@ export class RelatoriosComponent implements OnInit {
   readonly contasService = inject(ContasService);
   readonly cartoesService = inject(CartoesService);
 
+  readonly responsaveis = RESPONSAVEIS_PADRAO;
+
   meses = 6;
   categoriaId?: string;
   contaId?: string;
   cartaoId?: string;
+  responsavelId?: string;
 
   readonly donutOptions = computed((): Partial<ApexOptions> | null => {
     const fatias = this.relatoriosService.gastosPorCategoria();
+    if (!fatias.length) return null;
+    return {
+      series: fatias.map((f) => f.valor),
+      labels: fatias.map((f) => f.nome),
+      colors: fatias.map((f) => f.cor),
+      chart: { type: 'donut', height: 260 },
+      legend: { position: 'bottom' },
+      dataLabels: { enabled: false },
+    };
+  });
+
+  readonly donutResponsavelOptions = computed((): Partial<ApexOptions> | null => {
+    const fatias = this.relatoriosService.gastosPorResponsavel();
     if (!fatias.length) return null;
     return {
       series: fatias.map((f) => f.valor),
@@ -191,6 +233,7 @@ export class RelatoriosComponent implements OnInit {
       categoriaId: this.categoriaId,
       contaId: this.contaId,
       cartaoId: this.cartaoId,
+      responsavelId: this.responsavelId,
     });
     this.carregado.set(true);
   }
@@ -205,6 +248,7 @@ export class RelatoriosComponent implements OnInit {
       Descrição: l.descricao,
       Tipo: l.tipo,
       Categoria: this.categoriasService.categorias().find((c) => c.id === l.categoriaId)?.nome ?? '',
+      Responsável: this.responsaveis.find((r) => r.id === l.responsavelId)?.nome ?? '',
       Valor: l.valor,
       Status: l.status,
     }));

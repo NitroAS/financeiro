@@ -101,6 +101,32 @@ import { InvestimentosService } from '../investimentos/investimentos.service';
             }
           </div>
         </app-card>
+
+        <app-card class="lg:col-span-2">
+          <h2 class="mb-2 text-sm font-semibold">Despesas do mês por responsável</h2>
+          <div class="flex flex-col gap-3">
+            @for (r of resumo().porResponsavel; track r.responsavelId) {
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center justify-between text-sm">
+                  <span class="flex items-center gap-1.5 font-medium">
+                    <span class="h-2 w-2 rounded-full" [style.backgroundColor]="r.cor"></span>
+                    {{ r.nome }}
+                  </span>
+                  <span class="tabular-nums text-critical">{{ r.despesas | number: '1.2-2' }}</span>
+                </div>
+                <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    class="h-full rounded-full transition-[width] duration-300"
+                    [style.width.%]="maiorDespesa() ? (r.despesas / maiorDespesa()) * 100 : 0"
+                    [style.backgroundColor]="r.cor"
+                  ></div>
+                </div>
+              </div>
+            } @empty {
+              <p class="text-sm text-muted-foreground">Nenhum lançamento com responsável neste mês.</p>
+            }
+          </div>
+        </app-card>
       </div>
     </div>
   `,
@@ -111,6 +137,7 @@ export class DashboardComponent implements OnInit {
   readonly resumo = this.dashboardService.resumo;
 
   readonly patrimonioTotal = computed(() => this.resumo().saldoContas + this.investimentosService.patrimonioTotal);
+  readonly maiorDespesa = computed(() => Math.max(0, ...this.resumo().porResponsavel.map((r) => r.despesas)));
 
   ngOnInit(): void {
     void this.dashboardService.carregar();
