@@ -33,6 +33,18 @@ function normalizar(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// A coluna "ORIGEM" da planilha é texto livre — mistura bancos/cartões reais (itau, nubank,
+// inter...) com anotações que não são cartão nenhum (cofre/reserva de dinheiro, pix, máquina de
+// cartão, ou só as iniciais da pessoa). Só vira um cartão de verdade no app quando reconhecemos
+// um nome de banco/cartão conhecido — o resto vira apenas uma nota na observação do lançamento.
+const ORIGEM_NAO_CARTAO = /\b(pix|cofre|reserva|maquina|máquina|outros)\b/i;
+const ORIGEM_CARTAO_CONHECIDO = /itau|itaú|inter|nubank|\bnu\b|caixa|magalu|ponto|bradesco|santander|\bc6\b|picpay|credicard/i;
+
+function pareceCartaoReal(origemNormalizado: string): boolean {
+  if (!origemNormalizado || ORIGEM_NAO_CARTAO.test(origemNormalizado)) return false;
+  return ORIGEM_CARTAO_CONHECIDO.test(origemNormalizado);
+}
+
 function adivinharBanco(origem: string): string {
   const o = origem.toLowerCase();
   if (o.includes('nubank') || o.includes('nu ')) return 'Nubank';
@@ -104,7 +116,7 @@ export class ImportacaoService {
       string,
       { origensRaw: string[]; fechamentos: (number | null | undefined)[]; vencimentos: (number | null | undefined)[]; pessoas: Set<string> }
     >();
-    for (const e of entradas.filter((e) => e.tipoConta === 'rotativa')) {
+    for (const e of entradas.filter((e) => e.tipoConta === 'rotativa' && pareceCartaoReal(normalizar(e.origem)))) {
       const chave = normalizar(e.origem);
       if (cartaoIdPorChave.has(chave)) continue;
       if (!cartoesPorChave.has(chave)) {
@@ -149,6 +161,7 @@ export class ImportacaoService {
       if (!responsavelId) semResponsavel++;
 
       const dataIso = e.vencimento;
+      const origemEhCartao = e.tipoConta === 'rotativa' && pareceCartaoReal(normalizar(e.origem));
       novosLancamentos.push({
         tipo: 'despesa',
         descricao: e.descricao,
@@ -157,11 +170,11 @@ export class ImportacaoService {
         vencimento: dataIso,
         dataPagamento: e.quitado ? dataIso : null,
         status: e.quitado ? 'pago' : 'pendente',
-        cartaoId: e.tipoConta === 'rotativa' ? cartaoIdPorChave.get(normalizar(e.origem)) : undefined,
+        cartaoId: origemEhCartao ? cartaoIdPorChave.get(normalizar(e.origem)) : undefined,
         categoriaId: categorizar(e.descricao, 'despesa'),
         responsavelId: responsavelId ?? undefined,
         formaPagamento: e.tipoConta === 'fixa' ? e.formaPagamento || e.origem : undefined,
-        observacao: e.tipoConta === 'fixa' && e.origem ? `Origem: ${e.origem}` : undefined,
+        observacao: (e.tipoConta === 'fixa' || !origemEhCartao) && e.origem ? `Origem: ${e.origem}` : undefined,
         parcelaAtual: e.parcela.tipo === 'fracao' ? e.parcela.atual : undefined,
         parcelaTotal: e.parcela.tipo === 'fracao' ? e.parcela.total : undefined,
         origemImportacao,

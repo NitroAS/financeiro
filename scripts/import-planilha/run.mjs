@@ -57,6 +57,18 @@ function normalizar(s) {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// A coluna "ORIGEM" da planilha é texto livre — mistura bancos/cartões reais (itau, nubank,
+// inter...) com anotações que não são cartão nenhum (cofre/reserva de dinheiro, pix, máquina de
+// cartão, ou só as iniciais da pessoa). Só vira um cartão de verdade no app quando reconhecemos
+// um nome de banco/cartão conhecido — o resto vira apenas uma nota na observação do lançamento.
+const ORIGEM_NAO_CARTAO = /\b(pix|cofre|reserva|maquina|máquina|outros)\b/i;
+const ORIGEM_CARTAO_CONHECIDO = /itau|itaú|inter|nubank|\bnu\b|caixa|magalu|ponto|bradesco|santander|\bc6\b|picpay|credicard/i;
+
+function pareceCartaoReal(origemNormalizado) {
+  if (!origemNormalizado || ORIGEM_NAO_CARTAO.test(origemNormalizado)) return false;
+  return ORIGEM_CARTAO_CONHECIDO.test(origemNormalizado);
+}
+
 function adivinharBanco(origem) {
   const o = origem.toLowerCase();
   if (o.includes('nubank') || o.includes('nu ')) return 'Nubank';
@@ -98,7 +110,7 @@ console.log(`Salários encontrados: ${salarios.length}. Compras avulsas (dedupli
 
 // --- 2. Criar cartões a partir das origens das compras rotativas ---
 const cartoesPorChave = new Map();
-for (const e of entradas.filter((e) => e.tipoConta === 'rotativa')) {
+for (const e of entradas.filter((e) => e.tipoConta === 'rotativa' && pareceCartaoReal(normalizar(e.origem)))) {
   const chave = normalizar(e.origem);
   if (!cartoesPorChave.has(chave)) {
     cartoesPorChave.set(chave, { origensRaw: [], fechamentos: [], vencimentos: [], pessoas: new Set() });
@@ -144,6 +156,7 @@ for (const e of entradas) {
 
   const categoriaId = categorizar(e.descricao, 'despesa');
   const dataIso = e.vencimento;
+  const origemEhCartao = e.tipoConta === 'rotativa' && pareceCartaoReal(normalizar(e.origem));
 
   const base = {
     id: uuid(),
@@ -155,11 +168,11 @@ for (const e of entradas) {
     dataPagamento: e.quitado ? dataIso : null,
     status: e.quitado ? 'pago' : 'pendente',
     contaId: null,
-    cartaoId: e.tipoConta === 'rotativa' ? idCartaoPorChave.get(normalizar(e.origem)) : null,
+    cartaoId: origemEhCartao ? idCartaoPorChave.get(normalizar(e.origem)) : null,
     categoriaId,
     responsavelId,
     formaPagamento: e.tipoConta === 'fixa' ? e.formaPagamento || e.origem : null,
-    observacao: e.tipoConta === 'fixa' && e.origem ? `Origem: ${e.origem}` : null,
+    observacao: (e.tipoConta === 'fixa' || !origemEhCartao) && e.origem ? `Origem: ${e.origem}` : null,
     favorito: false,
     deletedAt: null,
     grupoParcelamentoId: null,
