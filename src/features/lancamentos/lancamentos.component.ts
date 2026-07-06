@@ -89,18 +89,17 @@ function parseDataLocal(iso: string): Date {
             }
           </select>
 
-          <button
-            appButton
-            [variant]="agruparPorPessoa() ? 'default' : 'outline'"
-            size="sm"
-            type="button"
-            class="ml-2"
-            (click)="agruparPorPessoa.set(!agruparPorPessoa())"
-            title="Mostrar os lançamentos separados por responsável"
+          <select
+            appSelect
+            class="ml-2 w-44"
+            aria-label="Organizar por"
+            [value]="modoAgrupamento()"
+            (change)="modoAgrupamento.set($any($event.target).value)"
           >
-            <lucide-angular name="users" [size]="14" />
-            Ver por pessoa
-          </button>
+            <option value="nenhuma">Lista simples</option>
+            <option value="pessoa">Ver por pessoa</option>
+            <option value="cartao">Ver por cartão</option>
+          </select>
 
           <button appButton variant="outline" size="sm" type="button" class="ml-2" (click)="alternarLixeira()">
             <lucide-angular name="trash-2" [size]="14" />
@@ -339,7 +338,18 @@ function parseDataLocal(iso: string): Date {
               </div>
             </div>
             <div class="flex items-center gap-3">
-              @if (!agruparPorPessoa() && responsavelPor(l.responsavelId); as resp) {
+              @if (modoAgrupamento() !== 'cartao' && cartaoPor(l.cartaoId); as cart) {
+                <span
+                  class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                  [style.backgroundColor]="cart.cor + '1a'"
+                  [style.color]="cart.cor"
+                  [title]="cart.banco + ' • ' + cart.bandeira"
+                >
+                  <lucide-angular name="credit-card" [size]="11" />
+                  {{ cart.nome }}
+                </span>
+              }
+              @if (modoAgrupamento() !== 'pessoa' && responsavelPor(l.responsavelId); as resp) {
                 <span
                   class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
                   [style.backgroundColor]="resp.cor + '1a'"
@@ -415,18 +425,16 @@ function parseDataLocal(iso: string): Date {
         }
       </ng-template>
 
-      @if (agruparPorPessoa()) {
+      @if (modoAgrupamento() !== 'nenhuma') {
         <div class="flex flex-col gap-4">
-          @for (grupo of gruposPorResponsavel(); track grupo.chave) {
+          @for (grupo of gruposParaExibir(); track grupo.chave) {
             <div class="flex flex-col gap-2">
               <div class="flex flex-wrap items-center justify-between gap-2 rounded-md px-1">
                 <span class="flex items-center gap-2 text-sm font-semibold">
-                  @if (grupo.responsavel; as resp) {
-                    <span class="h-2.5 w-2.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
-                    {{ resp.nome }}
-                  } @else {
-                    <span class="h-2.5 w-2.5 rounded-full bg-muted-foreground/40"></span>
-                    Sem responsável
+                  <span class="h-2.5 w-2.5 rounded-full" [style.backgroundColor]="grupo.cor"></span>
+                  {{ grupo.titulo }}
+                  @if (grupo.subtitulo) {
+                    <span class="text-xs font-normal text-muted-foreground">{{ grupo.subtitulo }}</span>
                   }
                   <span class="font-normal text-muted-foreground">({{ totalSubgrupo(grupo.receitas) + totalSubgrupo(grupo.despesas) }})</span>
                 </span>
@@ -545,27 +553,31 @@ export class LancamentosComponent implements OnInit {
 
   readonly editandoId = signal<string | null>(null);
   readonly detalhe = signal<{ itens: Lancamento[]; recorrenciaId: string | null } | null>(null);
-  readonly agruparPorPessoa = signal(false);
+  readonly modoAgrupamento = signal<'nenhuma' | 'pessoa' | 'cartao'>('nenhuma');
   readonly opcoesParcelas = [2, 3, 4, 6, 10, 12, 18, 24];
   readonly opcoesRecorrencia = [3, 6, 12, 24, 36];
 
-  readonly gruposPorResponsavel = computed(() => {
-    const lista = this.lancamentosService.lancamentos();
+  /** Agrupa os lançamentos do mês por uma chave qualquer (responsável, cartão...), já
+   * separando cada grupo em receitas/despesas e, dentro delas, em avulsas/parceladas/recorrentes. */
+  private agrupar(
+    categorias: { chave: string; titulo: string; cor: string; subtitulo?: string }[],
+    chaveDe: (l: Lancamento) => string | null,
+    tituloSemChave: string,
+  ) {
     const criarSubgrupo = () => ({ avulsos: [] as Lancamento[], parcelados: [] as Lancamento[], recorrentes: [] as Lancamento[] });
-    const criarGrupo = (responsavel: (typeof RESPONSAVEIS_PADRAO)[number] | null, chave: string) => ({
-      chave,
-      responsavel,
+    const criarGrupo = (c: { chave: string; titulo: string; cor: string; subtitulo?: string }) => ({
+      ...c,
       receitas: criarSubgrupo(),
       despesas: criarSubgrupo(),
       totalReceitas: 0,
       totalDespesas: 0,
       saldo: 0,
     });
-    const grupos = this.responsaveis.map((resp) => criarGrupo(resp, resp.id));
-    const semResponsavel = criarGrupo(null, '_sem');
+    const grupos = categorias.map(criarGrupo);
+    const semChave = criarGrupo({ chave: '_sem', titulo: tituloSemChave, cor: '#8A8698' });
 
-    for (const l of lista) {
-      const grupo = grupos.find((g) => g.chave === l.responsavelId) ?? semResponsavel;
+    for (const l of this.lancamentosService.lancamentos()) {
+      const grupo = grupos.find((g) => g.chave === chaveDe(l)) ?? semChave;
       const subgrupo = l.tipo === 'receita' ? grupo.receitas : grupo.despesas;
       const natureza = l.recorrenciaId ? subgrupo.recorrentes : l.grupoParcelamentoId ? subgrupo.parcelados : subgrupo.avulsos;
       natureza.push(l);
@@ -574,11 +586,30 @@ export class LancamentosComponent implements OnInit {
       grupo.saldo = grupo.totalReceitas - grupo.totalDespesas;
     }
 
-    return [...grupos, semResponsavel].filter(
-      (g) =>
-        g.receitas.avulsos.length + g.receitas.parcelados.length + g.receitas.recorrentes.length +
-        g.despesas.avulsos.length + g.despesas.parcelados.length + g.despesas.recorrentes.length > 0,
-    );
+    return [...grupos, semChave].filter((g) => this.totalSubgrupo(g.receitas) + this.totalSubgrupo(g.despesas) > 0);
+  }
+
+  readonly gruposPorResponsavel = computed(() =>
+    this.agrupar(
+      this.responsaveis.map((r) => ({ chave: r.id, titulo: r.nome, cor: r.cor })),
+      (l) => l.responsavelId,
+      'Sem responsável',
+    ),
+  );
+
+  readonly gruposPorCartao = computed(() =>
+    this.agrupar(
+      this.cartoesService.cartoes().map((c) => ({ chave: c.id, titulo: c.nome, cor: c.cor, subtitulo: `${c.banco} • ${c.bandeira}` })),
+      (l) => l.cartaoId,
+      'Sem cartão',
+    ),
+  );
+
+  readonly gruposParaExibir = computed(() => {
+    const modo = this.modoAgrupamento();
+    if (modo === 'pessoa') return this.gruposPorResponsavel();
+    if (modo === 'cartao') return this.gruposPorCartao();
+    return [];
   });
 
   readonly form = this.fb.nonNullable.group(
@@ -641,6 +672,10 @@ export class LancamentosComponent implements OnInit {
 
   responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {
     return id ? this.responsaveis.find((r) => r.id === id) : undefined;
+  }
+
+  cartaoPor(id: string | null) {
+    return id ? this.cartoesService.cartoes().find((c) => c.id === id) : undefined;
   }
 
   totalSubgrupo(sub: { avulsos: Lancamento[]; parcelados: Lancamento[]; recorrentes: Lancamento[] }): number {
