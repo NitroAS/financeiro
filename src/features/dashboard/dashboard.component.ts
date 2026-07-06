@@ -1,14 +1,17 @@
-import { Component, OnInit, computed, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { LucideAngularModule } from 'lucide-angular';
 import { CardComponent } from '../../shared/ui/card.component';
 import { BadgeComponent } from '../../shared/ui/badge.component';
+import { ButtonDirective } from '../../shared/ui/button.directive';
 import { DashboardService } from './dashboard.service';
 import { InvestimentosService } from '../investimentos/investimentos.service';
+import { LancamentosService, type Lancamento } from '../lancamentos/lancamentos.service';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [DecimalPipe, CardComponent, BadgeComponent],
+  imports: [DecimalPipe, CardComponent, BadgeComponent, ButtonDirective, LucideAngularModule],
   template: `
     <div class="flex flex-col gap-4">
       <h1 class="text-xl font-semibold tracking-tight">Dashboard</h1>
@@ -53,9 +56,24 @@ import { InvestimentosService } from '../investimentos/investimentos.service';
 
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <app-card>
-          <div class="mb-2 flex items-center justify-between">
-            <h2 class="text-sm font-semibold">Contas vencidas</h2>
-            <app-badge variant="critical">{{ resumo().contasVencidas.length }}</app-badge>
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <h2 class="flex items-center gap-2 text-sm font-semibold">
+              Contas vencidas
+              <app-badge variant="critical">{{ resumo().contasVencidas.length }}</app-badge>
+            </h2>
+            @if (resumo().contasVencidas.length > 0) {
+              <button
+                appButton
+                variant="outline"
+                size="sm"
+                type="button"
+                [disabled]="marcandoTodas() === 'vencidas'"
+                (click)="marcarTodasComoPagas(resumo().contasVencidas, 'vencidas')"
+              >
+                <lucide-angular name="check" [size]="13" />
+                {{ marcandoTodas() === 'vencidas' ? 'Marcando...' : 'Marcar todas como pagas' }}
+              </button>
+            }
           </div>
           <div class="flex flex-col gap-2">
             @for (l of resumo().contasVencidas; track l.id) {
@@ -70,9 +88,24 @@ import { InvestimentosService } from '../investimentos/investimentos.service';
         </app-card>
 
         <app-card>
-          <div class="mb-2 flex items-center justify-between">
-            <h2 class="text-sm font-semibold">Próximas contas</h2>
-            <app-badge variant="warning">{{ resumo().proximasContas.length }}</app-badge>
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <h2 class="flex items-center gap-2 text-sm font-semibold">
+              Próximas contas
+              <app-badge variant="warning">{{ resumo().proximasContas.length }}</app-badge>
+            </h2>
+            @if (resumo().proximasContas.length > 0) {
+              <button
+                appButton
+                variant="outline"
+                size="sm"
+                type="button"
+                [disabled]="marcandoTodas() === 'proximas'"
+                (click)="marcarTodasComoPagas(resumo().proximasContas, 'proximas')"
+              >
+                <lucide-angular name="check" [size]="13" />
+                {{ marcandoTodas() === 'proximas' ? 'Marcando...' : 'Marcar todas como pagas' }}
+              </button>
+            }
           </div>
           <div class="flex flex-col gap-2">
             @for (l of resumo().proximasContas; track l.id) {
@@ -133,14 +166,32 @@ import { InvestimentosService } from '../investimentos/investimentos.service';
 })
 export class DashboardComponent implements OnInit {
   private readonly dashboardService = inject(DashboardService);
+  private readonly lancamentosService = inject(LancamentosService);
   readonly investimentosService = inject(InvestimentosService);
   readonly resumo = this.dashboardService.resumo;
 
   readonly patrimonioTotal = computed(() => this.resumo().saldoContas + this.investimentosService.patrimonioTotal);
   readonly maiorDespesa = computed(() => Math.max(0, ...this.resumo().porResponsavel.map((r) => r.despesas)));
+  readonly marcandoTodas = signal<false | 'vencidas' | 'proximas'>(false);
 
   ngOnInit(): void {
     void this.dashboardService.carregar();
     void this.investimentosService.carregar();
+  }
+
+  async marcarTodasComoPagas(lista: Lancamento[], chave: 'vencidas' | 'proximas'): Promise<void> {
+    if (this.marcandoTodas() || lista.length === 0) return;
+    const plural = lista.length > 1 ? `essas ${lista.length} contas` : 'essa conta';
+    if (!confirm(`Marcar ${plural} como paga${lista.length > 1 ? 's' : ''}? Essa ação não pode ser desfeita em lote.`)) return;
+
+    this.marcandoTodas.set(chave);
+    try {
+      for (const l of lista) {
+        await this.lancamentosService.marcarPago(l.id);
+      }
+      await this.dashboardService.carregar();
+    } finally {
+      this.marcandoTodas.set(false);
+    }
   }
 }
