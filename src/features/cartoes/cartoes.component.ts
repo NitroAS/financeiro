@@ -200,6 +200,7 @@ export class CartoesComponent implements OnInit {
   readonly bandeiras = CARTAO_BANDEIRAS;
   readonly responsaveis = RESPONSAVEIS_PADRAO;
   readonly editandoId = signal<string | null>(null);
+  readonly salvando = signal(false);
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -223,37 +224,42 @@ export class CartoesComponent implements OnInit {
   }
 
   async salvar(): Promise<void> {
-    if (this.form.invalid) return;
-    const valores = this.form.getRawValue();
-    const editandoId = this.editandoId();
+    if (this.form.invalid || this.salvando()) return;
+    this.salvando.set(true);
+    try {
+      const valores = this.form.getRawValue();
+      const editandoId = this.editandoId();
 
-    if (editandoId) {
-      await this.cartoesService.atualizar(editandoId, {
+      if (editandoId) {
+        await this.cartoesService.atualizar(editandoId, {
+          ...valores,
+          contaPagamentoId: valores.contaPagamentoId || undefined,
+          responsavelId: valores.responsavelId || undefined,
+        });
+        this.cancelarEdicao();
+        return;
+      }
+
+      await this.cartoesService.criar({
         ...valores,
         contaPagamentoId: valores.contaPagamentoId || undefined,
         responsavelId: valores.responsavelId || undefined,
       });
-      this.cancelarEdicao();
-      return;
+      this.form.reset({
+        nome: '',
+        banco: '',
+        bandeira: CARTAO_BANDEIRAS[0],
+        limite: 1000,
+        diaFechamento: 1,
+        diaVencimento: 10,
+        contaPagamentoId: '',
+        responsavelId: '',
+        cor: CORES[0],
+        icone: 'credit-card',
+      });
+    } finally {
+      this.salvando.set(false);
     }
-
-    await this.cartoesService.criar({
-      ...valores,
-      contaPagamentoId: valores.contaPagamentoId || undefined,
-      responsavelId: valores.responsavelId || undefined,
-    });
-    this.form.reset({
-      nome: '',
-      banco: '',
-      bandeira: CARTAO_BANDEIRAS[0],
-      limite: 1000,
-      diaFechamento: 1,
-      diaVencimento: 10,
-      contaPagamentoId: '',
-      responsavelId: '',
-      cor: CORES[0],
-      icone: 'credit-card',
-    });
   }
 
   editar(c: Cartao): void {

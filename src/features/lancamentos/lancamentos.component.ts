@@ -275,9 +275,9 @@ function parseDataLocal(iso: string): Date {
               <input appInput formControlName="observacao" placeholder="Opcional" />
             </div>
 
-            <button appButton type="submit" [disabled]="form.invalid">
-              <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
-              {{ editandoId() ? 'Salvar alterações' : 'Lançar' }}
+            <button appButton type="submit" [disabled]="form.invalid || salvando()">
+              <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" [class]="salvando() ? 'animate-pulse' : ''" />
+              {{ salvando() ? 'Salvando...' : editandoId() ? 'Salvar alterações' : 'Lançar' }}
             </button>
           </div>
         </form>
@@ -569,6 +569,7 @@ export class LancamentosComponent implements OnInit {
 
   readonly editandoId = signal<string | null>(null);
   readonly repeticaoOriginalEdicao = signal<'nenhuma' | 'parcelado' | 'recorrente'>('nenhuma');
+  readonly salvando = signal(false);
   readonly detalhe = signal<{ itens: Lancamento[]; recorrenciaId: string | null } | null>(null);
   readonly modoAgrupamento = signal<'nenhuma' | 'pessoa' | 'cartao'>('nenhuma');
   readonly gruposColapsados = signal<ReadonlySet<string>>(new Set());
@@ -718,60 +719,65 @@ export class LancamentosComponent implements OnInit {
   }
 
   async salvar(): Promise<void> {
-    if (this.form.invalid) return;
-    const v = this.form.getRawValue();
-    const editandoId = this.editandoId();
+    if (this.form.invalid || this.salvando()) return;
+    this.salvando.set(true);
+    try {
+      const v = this.form.getRawValue();
+      const editandoId = this.editandoId();
 
-    if (editandoId) {
-      await this.lancamentosService.atualizar(editandoId, {
-        tipo: v.tipo,
-        descricao: v.descricao,
-        valor: v.valor,
-        data: parseDataLocal(v.data),
-        status: v.status,
-        categoriaId: v.categoriaId || undefined,
-        contaId: v.contaId || undefined,
-        cartaoId: v.cartaoId || undefined,
-        responsavelId: v.responsavelId || undefined,
-        observacao: v.observacao || undefined,
-        repeticao: v.repeticao,
-        quantidade: v.quantidade,
-        parcelaInicial: v.parcelaInicial,
-      });
-      this.cancelarEdicao();
-      return;
-    }
+      if (editandoId) {
+        await this.lancamentosService.atualizar(editandoId, {
+          tipo: v.tipo,
+          descricao: v.descricao,
+          valor: v.valor,
+          data: parseDataLocal(v.data),
+          status: v.status,
+          categoriaId: v.categoriaId || undefined,
+          contaId: v.contaId || undefined,
+          cartaoId: v.cartaoId || undefined,
+          responsavelId: v.responsavelId || undefined,
+          observacao: v.observacao || undefined,
+          repeticao: v.repeticao,
+          quantidade: v.quantidade,
+          parcelaInicial: v.parcelaInicial,
+        });
+        this.cancelarEdicao();
+        return;
+      }
 
-    if (v.repeticao === 'recorrente') {
-      await this.lancamentosService.criarRecorrente({
-        tipo: v.tipo,
-        descricao: v.descricao,
-        valor: v.valor,
-        data: parseDataLocal(v.data),
-        meses: v.quantidade,
-        categoriaId: v.categoriaId || undefined,
-        contaId: v.contaId || undefined,
-        cartaoId: v.cartaoId || undefined,
-        responsavelId: v.responsavelId || undefined,
-        observacao: v.observacao || undefined,
-      });
-    } else {
-      await this.lancamentosService.criar({
-        tipo: v.tipo,
-        descricao: v.descricao,
-        valor: v.valor,
-        data: parseDataLocal(v.data),
-        categoriaId: v.categoriaId || undefined,
-        contaId: v.contaId || undefined,
-        cartaoId: v.cartaoId || undefined,
-        responsavelId: v.responsavelId || undefined,
-        observacao: v.observacao || undefined,
-        parcelado: v.repeticao === 'parcelado',
-        totalParcelas: v.quantidade,
-        parcelaInicial: v.parcelaInicial,
-      });
+      if (v.repeticao === 'recorrente') {
+        await this.lancamentosService.criarRecorrente({
+          tipo: v.tipo,
+          descricao: v.descricao,
+          valor: v.valor,
+          data: parseDataLocal(v.data),
+          meses: v.quantidade,
+          categoriaId: v.categoriaId || undefined,
+          contaId: v.contaId || undefined,
+          cartaoId: v.cartaoId || undefined,
+          responsavelId: v.responsavelId || undefined,
+          observacao: v.observacao || undefined,
+        });
+      } else {
+        await this.lancamentosService.criar({
+          tipo: v.tipo,
+          descricao: v.descricao,
+          valor: v.valor,
+          data: parseDataLocal(v.data),
+          categoriaId: v.categoriaId || undefined,
+          contaId: v.contaId || undefined,
+          cartaoId: v.cartaoId || undefined,
+          responsavelId: v.responsavelId || undefined,
+          observacao: v.observacao || undefined,
+          parcelado: v.repeticao === 'parcelado',
+          totalParcelas: v.quantidade,
+          parcelaInicial: v.parcelaInicial,
+        });
+      }
+      this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2, parcelaInicial: 1 });
+    } finally {
+      this.salvando.set(false);
     }
-    this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2, parcelaInicial: 1 });
   }
 
   editar(l: Lancamento): void {

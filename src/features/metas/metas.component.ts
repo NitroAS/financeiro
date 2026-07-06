@@ -54,9 +54,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
             <label class="text-xs font-medium text-muted-foreground">Data alvo</label>
             <input appInput type="date" formControlName="dataAlvo" />
           </div>
-          <button appButton type="submit" [disabled]="form.invalid">
+          <button appButton type="submit" [disabled]="form.invalid || salvando()">
             <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
-            {{ editandoId() ? 'Salvar alterações' : 'Criar meta' }}
+            {{ salvando() ? 'Salvando...' : editandoId() ? 'Salvar alterações' : 'Criar meta' }}
           </button>
         </form>
       </app-card>
@@ -108,6 +108,7 @@ export class MetasComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   readonly metasService = inject(MetasService);
   readonly editandoId = signal<string | null>(null);
+  readonly salvando = signal(false);
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', Validators.required],
@@ -120,29 +121,34 @@ export class MetasComponent implements OnInit {
   }
 
   async salvar(): Promise<void> {
-    if (this.form.invalid) return;
-    const v = this.form.getRawValue();
-    const editandoId = this.editandoId();
+    if (this.form.invalid || this.salvando()) return;
+    this.salvando.set(true);
+    try {
+      const v = this.form.getRawValue();
+      const editandoId = this.editandoId();
 
-    if (editandoId) {
-      await this.metasService.atualizar(editandoId, {
+      if (editandoId) {
+        await this.metasService.atualizar(editandoId, {
+          nome: v.nome,
+          valorAlvo: v.valorAlvo,
+          dataAlvo: v.dataAlvo || undefined,
+        });
+        this.cancelarEdicao();
+        return;
+      }
+
+      const cor = CORES[this.metasService.metas().length % CORES.length];
+      await this.metasService.criar({
         nome: v.nome,
         valorAlvo: v.valorAlvo,
         dataAlvo: v.dataAlvo || undefined,
+        cor,
+        icone: 'target',
       });
-      this.cancelarEdicao();
-      return;
+      this.form.reset({ nome: '', valorAlvo: 1000, dataAlvo: '' });
+    } finally {
+      this.salvando.set(false);
     }
-
-    const cor = CORES[this.metasService.metas().length % CORES.length];
-    await this.metasService.criar({
-      nome: v.nome,
-      valorAlvo: v.valorAlvo,
-      dataAlvo: v.dataAlvo || undefined,
-      cor,
-      icone: 'target',
-    });
-    this.form.reset({ nome: '', valorAlvo: 1000, dataAlvo: '' });
   }
 
   editar(m: MetaComPrevisao): void {

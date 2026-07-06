@@ -73,9 +73,9 @@ const TIPOS = ['CDB', 'Tesouro', 'ETF', 'Acao', 'Fundo', 'Cripto'] as const;
             <label class="text-xs font-medium text-muted-foreground">Instituição</label>
             <input appInput formControlName="instituicao" placeholder="Opcional" />
           </div>
-          <button appButton type="submit" [disabled]="form.invalid">
+          <button appButton type="submit" [disabled]="form.invalid || salvando()">
             <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
-            {{ editandoId() ? 'Salvar alterações' : 'Adicionar' }}
+            {{ salvando() ? 'Salvando...' : editandoId() ? 'Salvar alterações' : 'Adicionar' }}
           </button>
         </form>
       </app-card>
@@ -124,6 +124,7 @@ export class InvestimentosComponent implements OnInit {
   readonly investimentosService = inject(InvestimentosService);
   readonly tipos = TIPOS;
   readonly editandoId = signal<string | null>(null);
+  readonly salvando = signal(false);
 
   readonly form = this.fb.nonNullable.group({
     nome: ['', Validators.required],
@@ -136,18 +137,23 @@ export class InvestimentosComponent implements OnInit {
   }
 
   async salvar(): Promise<void> {
-    if (this.form.invalid) return;
-    const v = this.form.getRawValue();
-    const editandoId = this.editandoId();
+    if (this.form.invalid || this.salvando()) return;
+    this.salvando.set(true);
+    try {
+      const v = this.form.getRawValue();
+      const editandoId = this.editandoId();
 
-    if (editandoId) {
-      await this.investimentosService.atualizar(editandoId, { ...v, instituicao: v.instituicao || undefined });
-      this.cancelarEdicao();
-      return;
+      if (editandoId) {
+        await this.investimentosService.atualizar(editandoId, { ...v, instituicao: v.instituicao || undefined });
+        this.cancelarEdicao();
+        return;
+      }
+
+      await this.investimentosService.criar({ ...v, instituicao: v.instituicao || undefined });
+      this.form.reset({ nome: '', tipo: 'CDB', instituicao: '' });
+    } finally {
+      this.salvando.set(false);
     }
-
-    await this.investimentosService.criar({ ...v, instituicao: v.instituicao || undefined });
-    this.form.reset({ nome: '', tipo: 'CDB', instituicao: '' });
   }
 
   editar(i: InvestimentoComSaldo): void {

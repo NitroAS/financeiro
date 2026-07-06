@@ -68,9 +68,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A',
               }
             </div>
           </div>
-          <button appButton type="submit" [disabled]="form.invalid">
+          <button appButton type="submit" [disabled]="form.invalid || salvando()">
             <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
-            {{ editandoId() ? 'Salvar alterações' : 'Adicionar' }}
+            {{ salvando() ? 'Salvando...' : editandoId() ? 'Salvar alterações' : 'Adicionar' }}
           </button>
         </form>
       </app-card>
@@ -119,6 +119,7 @@ export class CategoriasComponent implements OnInit {
   readonly categoriasService = inject(CategoriasService);
   readonly cores = CORES;
   readonly editandoId = signal<string | null>(null);
+  readonly salvando = signal(false);
 
   readonly despesas = computed(() => this.categoriasService.categorias().filter((c) => c.tipo === 'despesa'));
   readonly receitas = computed(() => this.categoriasService.categorias().filter((c) => c.tipo === 'receita'));
@@ -138,15 +139,20 @@ export class CategoriasComponent implements OnInit {
   }
 
   async salvar(): Promise<void> {
-    if (this.form.invalid) return;
-    const editandoId = this.editandoId();
-    if (editandoId) {
-      await this.categoriasService.atualizar(editandoId, this.form.getRawValue());
-      this.cancelarEdicao();
-      return;
+    if (this.form.invalid || this.salvando()) return;
+    this.salvando.set(true);
+    try {
+      const editandoId = this.editandoId();
+      if (editandoId) {
+        await this.categoriasService.atualizar(editandoId, this.form.getRawValue());
+        this.cancelarEdicao();
+        return;
+      }
+      await this.categoriasService.criar(this.form.getRawValue());
+      this.form.reset({ nome: '', tipo: 'despesa', cor: CORES[0], icone: 'tag' });
+    } finally {
+      this.salvando.set(false);
     }
-    await this.categoriasService.criar(this.form.getRawValue());
-    this.form.reset({ nome: '', tipo: 'despesa', cor: CORES[0], icone: 'tag' });
   }
 
   editar(c: Categoria): void {

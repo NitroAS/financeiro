@@ -18,6 +18,10 @@ const PESSOA_PARA_RESPONSAVEL: Record<string, string> = {
 
 const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A'];
 
+/** Bem acima de qualquer volume real — evita que o limite padrão de 1000 linhas por
+ * consulta do PostgREST (API do Supabase) corte a checagem de duplicidade pela metade. */
+const LIMITE_LINHAS = 100_000;
+
 export interface ResumoImportacao {
   totalLido: number;
   lancamentosNovos: number;
@@ -104,12 +108,16 @@ export class ImportacaoService {
 
     const db = this.dbService.db;
 
-    // Idempotência: não duplica lançamentos já importados antes (mesma origem).
-    const existentes = await db.select({ origemImportacao: lancamento.origemImportacao }).from(lancamento);
+    // Idempotência: não duplica lançamentos já importados antes (mesma origem). O .limit()
+    // explícito é essencial aqui: sem ele, a API do Supabase corta em 1000 linhas por
+    // consulta, e com a tabela de lançamentos passando de 1000 linhas essa checagem passaria
+    // a "esquecer" origens antigas e reimportar tudo de novo a cada nova planilha — duplicando
+    // silenciosamente.
+    const existentes = await db.select({ origemImportacao: lancamento.origemImportacao }).from(lancamento).limit(LIMITE_LINHAS);
     const jaImportados = new Set(existentes.map((e) => e.origemImportacao).filter((o): o is string => !!o));
 
     // Cartões: reaproveita os que já existem pelo nome, cria só os que faltam.
-    const cartoesExistentes = await db.select().from(cartao);
+    const cartoesExistentes = await db.select().from(cartao).limit(LIMITE_LINHAS);
     const cartaoIdPorChave = new Map(cartoesExistentes.map((c) => [normalizar(c.nome), c.id]));
 
     const cartoesPorChave = new Map<

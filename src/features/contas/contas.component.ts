@@ -106,9 +106,9 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A']
             </div>
           </div>
 
-          <button appButton type="submit" [disabled]="form.invalid">
+          <button appButton type="submit" [disabled]="form.invalid || salvando()">
             <lucide-angular [name]="editandoId() ? 'check' : 'plus'" [size]="16" />
-            {{ editandoId() ? 'Salvar alterações' : 'Adicionar' }}
+            {{ salvando() ? 'Salvando...' : editandoId() ? 'Salvar alterações' : 'Adicionar' }}
           </button>
         </form>
       </app-card>
@@ -167,6 +167,7 @@ export class ContasComponent implements OnInit {
   readonly cores = CORES;
   readonly responsaveis = RESPONSAVEIS_PADRAO;
   readonly editandoId = signal<string | null>(null);
+  readonly salvando = signal(false);
 
   readonly form = this.fb.nonNullable.group(
     {
@@ -186,34 +187,39 @@ export class ContasComponent implements OnInit {
   }
 
   async salvar(): Promise<void> {
-    if (this.form.invalid) return;
-    const valores = this.form.getRawValue();
-    const editandoId = this.editandoId();
+    if (this.form.invalid || this.salvando()) return;
+    this.salvando.set(true);
+    try {
+      const valores = this.form.getRawValue();
+      const editandoId = this.editandoId();
 
-    if (editandoId) {
-      await this.contasService.atualizar(editandoId, {
+      if (editandoId) {
+        await this.contasService.atualizar(editandoId, {
+          ...valores,
+          instituicao: valores.instituicao || undefined,
+          responsavelId: valores.responsavelId || undefined,
+        });
+        this.cancelarEdicao();
+        return;
+      }
+
+      await this.contasService.criar({
         ...valores,
         instituicao: valores.instituicao || undefined,
         responsavelId: valores.responsavelId || undefined,
       });
-      this.cancelarEdicao();
-      return;
+      this.form.reset({
+        nome: '',
+        tipo: 'corrente',
+        instituicao: '',
+        saldoInicial: 0,
+        cor: CORES[0],
+        icone: CONTA_ICONES[0],
+        responsavelId: '',
+      });
+    } finally {
+      this.salvando.set(false);
     }
-
-    await this.contasService.criar({
-      ...valores,
-      instituicao: valores.instituicao || undefined,
-      responsavelId: valores.responsavelId || undefined,
-    });
-    this.form.reset({
-      nome: '',
-      tipo: 'corrente',
-      instituicao: '',
-      saldoInicial: 0,
-      cor: CORES[0],
-      icone: CONTA_ICONES[0],
-      responsavelId: '',
-    });
   }
 
   editar(c: Conta): void {
