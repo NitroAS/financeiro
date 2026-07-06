@@ -6,6 +6,14 @@ import { addMonthsClamped, gerarParcelas, type NovoParcelamento } from '../../sh
 
 export type Lancamento = typeof lancamento.$inferSelect;
 
+/** Uma recorrência "permanente" não tem data pra parar, mas como o app materializa as
+ * ocorrências com antecedência (em vez de gerar sob demanda), ela precisa de um horizonte
+ * de meses sempre gerados à frente. `manterRecorrenciasPermanentes` completa esse horizonte
+ * a cada início de sessão; esses valores controlam o tamanho do horizonte e do lote de
+ * reposição quando ele começa a ficar curto. */
+const HORIZONTE_MESES_PERMANENTE = 12;
+const LOTE_REPOSICAO_PERMANENTE = 12;
+
 export interface NovoLancamentoInput {
   tipo: 'receita' | 'despesa';
   descricao: string;
@@ -33,6 +41,8 @@ export interface NovaRecorrenciaInput {
   cartaoId?: string;
   responsavelId?: string;
   observacao?: string;
+  /** Sem data pra parar — ignora `meses` e gera logo um horizonte maior (ver HORIZONTE_MESES_PERMANENTE). */
+  permanente?: boolean;
 }
 
 export interface EdicaoLancamentoInput {
@@ -64,6 +74,7 @@ export class LancamentosService {
 
   constructor() {
     this.dbService.db.subscribeTable(lancamento, () => void this.carregar());
+    void this.manterRecorrenciasPermanentes();
   }
 
   async carregar(): Promise<void> {
@@ -141,7 +152,8 @@ export class LancamentosService {
   }
 
   /** Gera de uma vez as próximas N ocorrências mensais (ex.: salário, aluguel), todas ligadas
-   * pelo mesmo recorrenciaId — ver `removerRecorrencia` para interromper as futuras. */
+   * pelo mesmo recorrenciaId — ver `removerRecorrencia` para interromper as futuras, ou
+   * `adicionarOcorrencias`/`manterRecorrenciasPermanentes` para gerar mais no futuro. */
   async criarRecorrente(input: NovaRecorrenciaInput): Promise<void> {
     const recorrenciaId = crypto.randomUUID();
     await this.dbService.db.insert(recorrencia).values({
@@ -149,6 +161,7 @@ export class LancamentosService {
       frequencia: 'mensal',
       diaReferencia: input.data.getDate(),
       ativa: true,
+      permanente: input.permanente ?? false,
     });
 
     const base = {
@@ -164,13 +177,117 @@ export class LancamentosService {
       recorrenciaId,
     };
 
-    const ocorrencias = Array.from({ length: Math.max(1, input.meses) }, (_, index) => {
+    const meses = input.permanente ? Math.max(input.meses, HORIZONTE_MESES_PERMANENTE) : Math.max(1, input.meses);
+    const ocorrencias = Array.from({ length: meses }, (_, index) => {
       const data = addMonthsClamped(input.data, index).toISOString();
       return { ...base, data, vencimento: data };
     });
 
     await this.dbService.db.insert(lancamento).values(ocorrencias);
     await this.carregar();
+  }
+
+  /** Acrescenta mais N parcelas a um parcelamento já existente, continuando os meses a
+   * partir da última parcela já gerada (mesmos descrição/valor/categoria/conta/cartão/
+   * responsável da última) e atualizando o total em todas as parcelas do grupo. */
+  async adicionarParcelas(grupoParcelamentoId: string, quantidadeAdicional: number): Promise<void> {
+    if (quantidadeAdicional < 1) return;
+    const itens = await this.buscarGrupoParcelamento(grupoParcelamentoId);
+    if (!itens.length) return;
+
+    const ultima = [...itens].sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0)).at(-1)!;
+    const novoTotal = (ultima.parcelaTotal ?? itens.length) + quantidadeAdicional;
+
+    await this.dbService.db
+      .update(lancamento)
+      .set({ parcelaTotal: novoTotal })
+      .where(eq(lancamento.grupoParcelamentoId, grupoParcelamentoId));
+
+    const novasParcelas = Array.from({ length: quantidadeAdicional }, (_, index) => {
+      const data = addMonthsClamped(new Date(ultima.data), index + 1).toISOString();
+      return {
+        tipo: ultima.tipo,
+        descricao: ultima.descricao,
+        valor: ultima.valor,
+        data,
+        vencimento: data,
+        status: 'pendente' as const,
+        grupoParcelamentoId,
+        parcelaAtual: (ultima.parcelaAtual ?? itens.length) + index + 1,
+        parcelaTotal: novoTotal,
+        contaId: ultima.contaId ?? undefined,
+        cartaoId: ultima.cartaoId ?? undefined,
+        categoriaId: ultima.categoriaId ?? undefined,
+        responsavelId: ultima.responsavelId ?? undefined,
+        observacao: ultima.observacao ?? undefined,
+      };
+    });
+    await this.dbService.db.insert(lancamento).values(novasParcelas);
+    await this.carregar();
+  }
+
+  /** Acrescenta mais N meses a uma recorrência já existente, continuando a partir da
+   * última ocorrência já gerada (mesma descrição/valor/categoria/conta/cartão/responsável). */
+  async adicionarOcorrencias(recorrenciaId: string, mesesAdicionais: number): Promise<void> {
+    if (mesesAdicionais < 1) return;
+    const itens = await this.buscarRecorrencia(recorrenciaId);
+    if (!itens.length) return;
+
+    const ultima = [...itens].sort((a, b) => a.data.localeCompare(b.data)).at(-1)!;
+    const novasOcorrencias = Array.from({ length: mesesAdicionais }, (_, index) => {
+      const data = addMonthsClamped(new Date(ultima.data), index + 1).toISOString();
+      return {
+        tipo: ultima.tipo,
+        descricao: ultima.descricao,
+        valor: ultima.valor,
+        data,
+        vencimento: data,
+        status: 'pendente' as const,
+        contaId: ultima.contaId ?? undefined,
+        cartaoId: ultima.cartaoId ?? undefined,
+        categoriaId: ultima.categoriaId ?? undefined,
+        responsavelId: ultima.responsavelId ?? undefined,
+        observacao: ultima.observacao ?? undefined,
+        recorrenciaId,
+      };
+    });
+    await this.dbService.db.insert(lancamento).values(novasOcorrencias);
+    await this.carregar();
+  }
+
+  /** Liga/desliga a marca de "permanente" numa recorrência já existente. Ao ligar, já
+   * completa na hora o horizonte de meses gerados à frente (não espera o próximo carregamento). */
+  async definirRecorrenciaPermanente(recorrenciaId: string, permanente: boolean): Promise<void> {
+    await this.dbService.db.update(recorrencia).set({ permanente }).where(eq(recorrencia.id, recorrenciaId));
+    if (permanente) await this.completarHorizonte(recorrenciaId);
+  }
+
+  private async completarHorizonte(recorrenciaId: string): Promise<void> {
+    const itens = await this.buscarRecorrencia(recorrenciaId);
+    if (!itens.length) return;
+    const ultima = [...itens].sort((a, b) => a.data.localeCompare(b.data)).at(-1)!;
+    const horizonte = addMonthsClamped(new Date(), HORIZONTE_MESES_PERMANENTE);
+    const mesesFaltando = mesesEntre(new Date(ultima.data), horizonte);
+    if (mesesFaltando > 0) await this.adicionarOcorrencias(recorrenciaId, Math.min(mesesFaltando, LOTE_REPOSICAO_PERMANENTE));
+  }
+
+  /** Roda uma vez por sessão: para cada recorrência ativa marcada como "permanente", garante
+   * que sempre há pelo menos HORIZONTE_MESES_PERMANENTE meses já gerados à frente de hoje —
+   * como o app materializa ocorrências com antecedência (em vez de sob demanda), sem isso uma
+   * recorrência "permanente" simplesmente pararia de existir quando o lote inicial acabasse. */
+  async manterRecorrenciasPermanentes(): Promise<void> {
+    try {
+      const ativas = await this.dbService.db
+        .select()
+        .from(recorrencia)
+        .where(and(eq(recorrencia.ativa, true), eq(recorrencia.permanente, true)));
+      for (const r of ativas) {
+        await this.completarHorizonte(r.id);
+      }
+    } catch {
+      // Se a coluna "permanente" ainda não existir (banco criado antes desse recurso e
+      // supabase/schema.sql ainda não rerodado), não deixa isso quebrar o carregamento do app.
+    }
   }
 
   /** Interrompe uma recorrência: remove (para a lixeira) as ocorrências futuras ainda não
@@ -363,6 +480,12 @@ export class LancamentosService {
       .orderBy(lancamento.data);
   }
 
+  /** A regra (ativa/permanente) por trás de uma recorrência, pra tela de detalhe. */
+  async buscarRecorrenciaInfo(recorrenciaId: string): Promise<{ ativa: boolean; permanente: boolean } | undefined> {
+    const [info] = await this.dbService.db.select().from(recorrencia).where(eq(recorrencia.id, recorrenciaId));
+    return info;
+  }
+
   async carregarLixeira(): Promise<void> {
     const rows = await this.dbService.db
       .select()
@@ -387,4 +510,9 @@ export class LancamentosService {
 function mesAtual(): { mes: number; ano: number } {
   const hoje = new Date();
   return { mes: hoje.getMonth(), ano: hoje.getFullYear() };
+}
+
+/** Diferença aproximada em meses (só olha mês/ano, ignora o dia) entre duas datas. */
+function mesesEntre(de: Date, ate: Date): number {
+  return (ate.getFullYear() - de.getFullYear()) * 12 + (ate.getMonth() - de.getMonth());
 }

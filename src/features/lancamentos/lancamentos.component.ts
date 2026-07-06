@@ -34,6 +34,7 @@ const lancamentoSchema = z.object({
   repeticao: z.enum(['nenhuma', 'parcelado', 'recorrente']),
   quantidade: z.number().int().min(1).max(60),
   parcelaInicial: z.number().int().min(1).max(60),
+  permanente: z.boolean(),
 }).refine((v) => v.repeticao !== 'parcelado' || v.parcelaInicial <= v.quantidade, {
   message: 'A parcela inicial não pode ser maior que o total de parcelas',
   path: ['parcelaInicial'],
@@ -276,6 +277,10 @@ function parseDataLocal(iso: string): Date {
                   }
                 </div>
               </div>
+              <label class="flex items-center gap-2 self-end pb-2 text-xs text-muted-foreground">
+                <input type="checkbox" formControlName="permanente" />
+                Permanente (sem data pra parar)
+              </label>
             }
 
             <div class="flex min-w-[200px] flex-1 flex-col gap-1">
@@ -562,11 +567,67 @@ function parseDataLocal(iso: string): Date {
               }
             </div>
 
-            @if (d.recorrenciaId; as recorrenciaId) {
-              <button appButton variant="outline" class="mt-4 w-full text-critical" type="button" (click)="pararRecorrenciaDetalhe(recorrenciaId)">
-                Parar recorrência (remove ocorrências futuras)
-              </button>
-            }
+            <div class="mt-4 flex flex-col gap-2 border-t border-border pt-3">
+              @if (d.grupoParcelamentoId; as grupoParcelamentoId) {
+                <div class="flex items-center gap-2">
+                  <input
+                    appInput
+                    type="number"
+                    min="1"
+                    class="w-20"
+                    [value]="quantidadeExtra()"
+                    (input)="quantidadeExtra.set($any($event.target).valueAsNumber || 1)"
+                  />
+                  <button
+                    appButton
+                    variant="outline"
+                    class="flex-1"
+                    type="button"
+                    [disabled]="processandoDetalhe()"
+                    (click)="adicionarParcelasDetalhe(grupoParcelamentoId)"
+                  >
+                    {{ processandoDetalhe() ? 'Adicionando...' : 'Adicionar mais parcelas' }}
+                  </button>
+                </div>
+              }
+
+              @if (d.recorrenciaId; as recorrenciaId) {
+                <div class="flex items-center gap-2">
+                  <input
+                    appInput
+                    type="number"
+                    min="1"
+                    class="w-20"
+                    [value]="quantidadeExtra()"
+                    (input)="quantidadeExtra.set($any($event.target).valueAsNumber || 1)"
+                  />
+                  <button
+                    appButton
+                    variant="outline"
+                    class="flex-1"
+                    type="button"
+                    [disabled]="processandoDetalhe()"
+                    (click)="adicionarOcorrenciasDetalhe(recorrenciaId)"
+                  >
+                    {{ processandoDetalhe() ? 'Adicionando...' : 'Adicionar mais meses' }}
+                  </button>
+                </div>
+
+                <label class="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    [checked]="d.permanente"
+                    [disabled]="processandoDetalhe()"
+                    (change)="alternarPermanenteDetalhe(recorrenciaId, $any($event.target).checked)"
+                  />
+                  Recorrente permanentemente (sem data pra parar — o app mantém sempre {{ 12 }} meses gerados à frente)
+                </label>
+
+                <button appButton variant="outline" class="w-full text-critical" type="button" (click)="pararRecorrenciaDetalhe(recorrenciaId)">
+                  Parar recorrência (remove ocorrências futuras)
+                </button>
+              }
+            </div>
           </div>
         </div>
       }
@@ -593,7 +654,14 @@ export class LancamentosComponent implements OnInit {
   readonly editandoId = signal<string | null>(null);
   readonly repeticaoOriginalEdicao = signal<'nenhuma' | 'parcelado' | 'recorrente'>('nenhuma');
   readonly salvando = signal(false);
-  readonly detalhe = signal<{ itens: Lancamento[]; recorrenciaId: string | null } | null>(null);
+  readonly detalhe = signal<{
+    itens: Lancamento[];
+    recorrenciaId: string | null;
+    grupoParcelamentoId: string | null;
+    permanente: boolean;
+  } | null>(null);
+  readonly quantidadeExtra = signal(2);
+  readonly processandoDetalhe = signal(false);
   readonly modoAgrupamento = signal<'nenhuma' | 'pessoa' | 'cartao'>('nenhuma');
   readonly gruposColapsados = signal<ReadonlySet<string>>(new Set());
   readonly opcoesParcelas = [2, 3, 4, 6, 10, 12, 18, 24];
@@ -675,6 +743,7 @@ export class LancamentosComponent implements OnInit {
       repeticao: ['nenhuma' as 'nenhuma' | 'parcelado' | 'recorrente'],
       quantidade: [2],
       parcelaInicial: [1],
+      permanente: [false],
     },
     { validators: zodValidator(lancamentoSchema) },
   );
@@ -785,6 +854,7 @@ export class LancamentosComponent implements OnInit {
           valor: v.valor,
           data: parseDataLocal(v.data),
           meses: v.quantidade,
+          permanente: v.permanente,
           categoriaId: v.categoriaId || undefined,
           contaId: v.contaId || undefined,
           cartaoId: v.cartaoId || undefined,
@@ -807,7 +877,7 @@ export class LancamentosComponent implements OnInit {
           parcelaInicial: v.parcelaInicial,
         });
       }
-      this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2, parcelaInicial: 1 });
+      this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2, parcelaInicial: 1, permanente: false });
     } finally {
       this.salvando.set(false);
     }
@@ -862,21 +932,65 @@ export class LancamentosComponent implements OnInit {
       repeticao: 'nenhuma',
       quantidade: 2,
       parcelaInicial: 1,
+      permanente: false,
     });
   }
 
   async verDetalhe(l: Lancamento): Promise<void> {
     if (l.grupoParcelamentoId) {
       const itens = await this.lancamentosService.buscarGrupoParcelamento(l.grupoParcelamentoId);
-      this.detalhe.set({ itens, recorrenciaId: null });
+      this.detalhe.set({ itens, recorrenciaId: null, grupoParcelamentoId: l.grupoParcelamentoId, permanente: false });
+      this.quantidadeExtra.set(2);
     } else if (l.recorrenciaId) {
-      const itens = await this.lancamentosService.buscarRecorrencia(l.recorrenciaId);
-      this.detalhe.set({ itens, recorrenciaId: l.recorrenciaId });
+      const [itens, info] = await Promise.all([
+        this.lancamentosService.buscarRecorrencia(l.recorrenciaId),
+        this.lancamentosService.buscarRecorrenciaInfo(l.recorrenciaId),
+      ]);
+      this.detalhe.set({ itens, recorrenciaId: l.recorrenciaId, grupoParcelamentoId: null, permanente: info?.permanente ?? false });
+      this.quantidadeExtra.set(3);
     }
   }
 
   fecharDetalhe(): void {
     this.detalhe.set(null);
+  }
+
+  async adicionarParcelasDetalhe(grupoParcelamentoId: string): Promise<void> {
+    const quantidade = this.quantidadeExtra();
+    if (quantidade < 1 || this.processandoDetalhe()) return;
+    this.processandoDetalhe.set(true);
+    try {
+      await this.lancamentosService.adicionarParcelas(grupoParcelamentoId, quantidade);
+      const itens = await this.lancamentosService.buscarGrupoParcelamento(grupoParcelamentoId);
+      this.detalhe.set({ itens, recorrenciaId: null, grupoParcelamentoId, permanente: false });
+    } finally {
+      this.processandoDetalhe.set(false);
+    }
+  }
+
+  async adicionarOcorrenciasDetalhe(recorrenciaId: string): Promise<void> {
+    const quantidade = this.quantidadeExtra();
+    if (quantidade < 1 || this.processandoDetalhe()) return;
+    this.processandoDetalhe.set(true);
+    try {
+      await this.lancamentosService.adicionarOcorrencias(recorrenciaId, quantidade);
+      const itens = await this.lancamentosService.buscarRecorrencia(recorrenciaId);
+      this.detalhe.update((d) => (d ? { ...d, itens } : d));
+    } finally {
+      this.processandoDetalhe.set(false);
+    }
+  }
+
+  async alternarPermanenteDetalhe(recorrenciaId: string, permanente: boolean): Promise<void> {
+    if (this.processandoDetalhe()) return;
+    this.processandoDetalhe.set(true);
+    try {
+      await this.lancamentosService.definirRecorrenciaPermanente(recorrenciaId, permanente);
+      const itens = await this.lancamentosService.buscarRecorrencia(recorrenciaId);
+      this.detalhe.update((d) => (d ? { ...d, itens, permanente } : d));
+    } finally {
+      this.processandoDetalhe.set(false);
+    }
   }
 
   contarPagas(itens: Lancamento[]): number {

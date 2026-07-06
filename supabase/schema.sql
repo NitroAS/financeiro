@@ -61,8 +61,12 @@ create table if not exists recorrencia (
   id text primary key default gen_random_uuid()::text,
   frequencia text not null check (frequencia in ('mensal', 'semanal', 'anual')),
   dia_referencia integer not null,
-  ativa boolean not null default true
+  ativa boolean not null default true,
+  permanente boolean not null default false
 );
+
+-- Se a tabela já existia antes desta coluna existir, cria ela agora (idempotente).
+alter table recorrencia add column if not exists permanente boolean not null default false;
 
 create table if not exists lancamento (
   id text primary key default gen_random_uuid()::text,
