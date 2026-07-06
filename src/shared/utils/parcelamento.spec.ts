@@ -39,6 +39,40 @@ describe('gerarParcelas', () => {
     expect(parcelas.every((p) => p.valor === 300.5)).toBe(true);
   });
 
+  it('permite começar a partir de uma parcela em andamento (ex.: 3/12), gerando só as restantes', () => {
+    const parcelas = gerarParcelas({
+      descricao: 'Sofá',
+      valorParcela: 150,
+      totalParcelas: 12,
+      parcelaInicial: 3,
+      dataPrimeiraParcela: new Date(2025, 2, 10), // 10/03/2025 (mês da 3ª parcela)
+    });
+
+    expect(parcelas.length).toBe(10); // 3..12
+
+    expect(parcelas[0].parcelaAtual).toBe(3);
+    expect(parcelas[0].parcelaTotal).toBe(12);
+    expect(new Date(parcelas[0].data).getMonth()).toBe(2); // Março
+
+    expect(parcelas[9].parcelaAtual).toBe(12);
+    expect(new Date(parcelas[9].data).getMonth()).toBe(11); // Dezembro
+
+    const gruposUnicos = new Set(parcelas.map((p) => p.grupoParcelamentoId));
+    expect(gruposUnicos.size).toBe(1);
+  });
+
+  it('rejeita parcelaInicial fora do intervalo [1, totalParcelas]', () => {
+    expect(() =>
+      gerarParcelas({
+        descricao: 'x',
+        valorParcela: 10,
+        totalParcelas: 5,
+        parcelaInicial: 6,
+        dataPrimeiraParcela: new Date(),
+      }),
+    ).toThrow();
+  });
+
   it('rejeita totalParcelas menor que 1', () => {
     expect(() =>
       gerarParcelas({

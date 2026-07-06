@@ -19,6 +19,7 @@ export interface NovoLancamentoInput {
   observacao?: string;
   parcelado: boolean;
   totalParcelas: number;
+  parcelaInicial?: number;
 }
 
 export interface NovaRecorrenciaInput {
@@ -114,6 +115,7 @@ export class LancamentosService {
         descricao: input.descricao,
         valorParcela: input.valor,
         totalParcelas: input.totalParcelas,
+        parcelaInicial: input.parcelaInicial,
         dataPrimeiraParcela: input.data,
         ...base,
       };

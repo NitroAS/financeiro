@@ -33,6 +33,10 @@ const lancamentoSchema = z.object({
   observacao: z.string().optional(),
   repeticao: z.enum(['nenhuma', 'parcelado', 'recorrente']),
   quantidade: z.number().int().min(1).max(60),
+  parcelaInicial: z.number().int().min(1).max(60),
+}).refine((v) => v.repeticao !== 'parcelado' || v.parcelaInicial <= v.quantidade, {
+  message: 'A parcela inicial não pode ser maior que o total de parcelas',
+  path: ['parcelaInicial'],
 });
 
 const MESES = [
@@ -219,6 +223,12 @@ function parseDataLocal(iso: string): Date {
                       </button>
                     }
                   </div>
+                </div>
+                <div class="flex w-40 flex-col gap-1">
+                  <label class="text-xs font-medium text-muted-foreground" title="Se a compra já está em andamento (ex.: 3/12), coloque aqui a parcela atual em vez de começar do 1">
+                    Começar a partir da parcela
+                  </label>
+                  <input appInput type="number" min="1" [attr.max]="form.value.quantidade" formControlName="parcelaInicial" />
                 </div>
               }
               @if (form.value.repeticao === 'recorrente') {
@@ -458,6 +468,7 @@ export class LancamentosComponent implements OnInit {
       observacao: [''],
       repeticao: ['nenhuma' as 'nenhuma' | 'parcelado' | 'recorrente'],
       quantidade: [2],
+      parcelaInicial: [1],
     },
     { validators: zodValidator(lancamentoSchema) },
   );
@@ -557,9 +568,10 @@ export class LancamentosComponent implements OnInit {
         observacao: v.observacao || undefined,
         parcelado: v.repeticao === 'parcelado',
         totalParcelas: v.quantidade,
+        parcelaInicial: v.parcelaInicial,
       });
     }
-    this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2 });
+    this.form.patchValue({ descricao: '', valor: 0, observacao: '', repeticao: 'nenhuma', quantidade: 2, parcelaInicial: 1 });
   }
 
   editar(l: Lancamento): void {
@@ -594,6 +606,7 @@ export class LancamentosComponent implements OnInit {
       observacao: '',
       repeticao: 'nenhuma',
       quantidade: 2,
+      parcelaInicial: 1,
     });
   }
 

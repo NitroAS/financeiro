@@ -2,8 +2,11 @@ export interface NovoParcelamento {
   descricao: string;
   valorParcela: number;
   totalParcelas: number;
-  /** Data (ou vencimento) da primeira parcela — as demais são projetadas a partir dela. */
+  /** Data (ou vencimento) da parcela `parcelaInicial` — as demais são projetadas a partir dela. */
   dataPrimeiraParcela: Date;
+  /** Número da parcela que está sendo lançada agora (ex.: 3, para uma compra que já está
+   * "3/12" em andamento e só passou a ser controlada aqui a partir daí). Default 1. */
+  parcelaInicial?: number;
   contaId?: string;
   cartaoId?: string;
   categoriaId?: string;
@@ -44,10 +47,15 @@ export function gerarParcelas(input: NovoParcelamento): ParcelaGerada[] {
   if (input.totalParcelas < 1) {
     throw new Error('totalParcelas deve ser pelo menos 1');
   }
+  const parcelaInicial = input.parcelaInicial ?? 1;
+  if (parcelaInicial < 1 || parcelaInicial > input.totalParcelas) {
+    throw new Error('parcelaInicial deve estar entre 1 e totalParcelas');
+  }
 
   const grupoParcelamentoId = crypto.randomUUID();
+  const quantidadeAGerar = input.totalParcelas - parcelaInicial + 1;
 
-  return Array.from({ length: input.totalParcelas }, (_, index) => {
+  return Array.from({ length: quantidadeAGerar }, (_, index) => {
     const dataParcela = addMonthsClamped(input.dataPrimeiraParcela, index).toISOString();
     return {
       descricao: input.descricao,
@@ -56,7 +64,7 @@ export function gerarParcelas(input: NovoParcelamento): ParcelaGerada[] {
       vencimento: dataParcela,
       status: 'pendente',
       grupoParcelamentoId,
-      parcelaAtual: index + 1,
+      parcelaAtual: parcelaInicial + index,
       parcelaTotal: input.totalParcelas,
       contaId: input.contaId,
       cartaoId: input.cartaoId,
