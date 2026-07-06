@@ -89,6 +89,19 @@ function parseDataLocal(iso: string): Date {
             }
           </select>
 
+          <button
+            appButton
+            [variant]="agruparPorPessoa() ? 'default' : 'outline'"
+            size="sm"
+            type="button"
+            class="ml-2"
+            (click)="agruparPorPessoa.set(!agruparPorPessoa())"
+            title="Mostrar os lançamentos separados por responsável"
+          >
+            <lucide-angular name="users" [size]="14" />
+            Ver por pessoa
+          </button>
+
           <button appButton variant="outline" size="sm" type="button" class="ml-2" (click)="alternarLixeira()">
             <lucide-angular name="trash-2" [size]="14" />
             Lixeira
@@ -270,108 +283,160 @@ function parseDataLocal(iso: string): Date {
         </app-card>
       }
 
-      <div class="flex flex-col gap-2">
-        @for (l of lancamentosService.lancamentos(); track l.id) {
-          @if (editandoId() === l.id) {
-            <app-card [id]="'lancamento-' + l.id">
-              <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
-                <span class="flex items-center gap-2">
-                  <lucide-angular name="pencil" [size]="14" />
-                  Editando lançamento
-                </span>
-                <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
-              </div>
-              <ng-container *ngTemplateOutlet="formularioLancamento" />
-            </app-card>
-          } @else {
-            <app-card
-              [id]="'lancamento-' + l.id"
-              class="flex items-center justify-between transition-shadow duration-500"
-              [class.ring-2]="lancamentosService.destacarId() === l.id"
-              [class.ring-primary]="lancamentosService.destacarId() === l.id"
-            >
-              <div class="flex items-center gap-3">
-                <span
-                  class="h-2.5 w-2.5 rounded-full"
-                  [class]="l.tipo === 'receita' ? 'bg-success' : 'bg-critical'"
-                ></span>
-                <div>
-                  <div class="text-sm font-medium">
-                    @if (l.grupoParcelamentoId || l.recorrenciaId) {
-                      <button type="button" class="text-left hover:underline" (click)="verDetalhe(l)">{{ l.descricao }}</button>
-                    } @else {
-                      {{ l.descricao }}
-                    }
-                    @if (l.parcelaTotal) {
-                      <button
-                        type="button"
-                        class="ml-1 text-xs font-normal text-muted-foreground hover:text-primary hover:underline"
-                        (click)="verDetalhe(l)"
-                      >
-                        {{ l.parcelaAtual }}/{{ l.parcelaTotal }}
-                      </button>
-                    }
-                    @if (l.recorrenciaId) {
-                      <button
-                        type="button"
-                        class="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-primary"
-                        (click)="verDetalhe(l)"
-                        title="Recorrente — clique para ver as ocorrências"
-                      >
-                        <lucide-angular name="repeat" [size]="11" />
-                        recorrente
-                      </button>
-                    }
-                  </div>
-                  <div class="text-xs text-muted-foreground">{{ formatarData(l.data) }}</div>
+      <ng-template #linhaLancamento let-l>
+        @if (editandoId() === l.id) {
+          <app-card [id]="'lancamento-' + l.id">
+            <div class="mb-3 flex items-center justify-between rounded-md bg-primary-soft px-3 py-2 text-sm text-primary">
+              <span class="flex items-center gap-2">
+                <lucide-angular name="pencil" [size]="14" />
+                Editando lançamento
+              </span>
+              <button appButton variant="ghost" size="sm" type="button" (click)="cancelarEdicao()">Cancelar</button>
+            </div>
+            <ng-container *ngTemplateOutlet="formularioLancamento" />
+          </app-card>
+        } @else {
+          <app-card
+            [id]="'lancamento-' + l.id"
+            class="flex items-center justify-between transition-shadow duration-500"
+            [class.ring-2]="lancamentosService.destacarId() === l.id"
+            [class.ring-primary]="lancamentosService.destacarId() === l.id"
+          >
+            <div class="flex items-center gap-3">
+              <span
+                class="h-2.5 w-2.5 rounded-full"
+                [class]="l.tipo === 'receita' ? 'bg-success' : 'bg-critical'"
+              ></span>
+              <div>
+                <div class="text-sm font-medium">
+                  @if (l.grupoParcelamentoId || l.recorrenciaId) {
+                    <button type="button" class="text-left hover:underline" (click)="verDetalhe(l)">{{ l.descricao }}</button>
+                  } @else {
+                    {{ l.descricao }}
+                  }
+                  @if (l.parcelaTotal) {
+                    <button
+                      type="button"
+                      class="ml-1 text-xs font-normal text-muted-foreground hover:text-primary hover:underline"
+                      (click)="verDetalhe(l)"
+                    >
+                      {{ l.parcelaAtual }}/{{ l.parcelaTotal }}
+                    </button>
+                  }
+                  @if (l.recorrenciaId) {
+                    <button
+                      type="button"
+                      class="ml-1 inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground hover:text-primary"
+                      (click)="verDetalhe(l)"
+                      title="Recorrente — clique para ver as ocorrências"
+                    >
+                      <lucide-angular name="repeat" [size]="11" />
+                      recorrente
+                    </button>
+                  }
                 </div>
+                <div class="text-xs text-muted-foreground">{{ formatarData(l.data) }}</div>
               </div>
-              <div class="flex items-center gap-3">
-                @if (responsavelPor(l.responsavelId); as resp) {
-                  <span
-                    class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                    [style.backgroundColor]="resp.cor + '1a'"
-                    [style.color]="resp.cor"
-                  >
-                    <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
-                    {{ resp.nome }}
-                  </span>
-                }
-                <app-badge [variant]="l.status === 'pago' ? 'success' : 'warning'">{{ l.status }}</app-badge>
-                <span class="tabular-nums text-sm font-medium" [class]="l.tipo === 'receita' ? 'text-success' : ''">
-                  {{ l.tipo === 'receita' ? '+' : '-' }}{{ l.valor | number: '1.2-2' }}
-                </span>
-                @if (l.status !== 'pago') {
-                  <button appButton variant="ghost" size="icon" type="button" (click)="marcarPago(l.id)" aria-label="Marcar como pago">
-                    <lucide-angular name="check" [size]="15" />
-                  </button>
-                }
-                <button
-                  appButton
-                  variant="ghost"
-                  size="icon"
-                  type="button"
-                  (click)="favoritar(l)"
-                  [attr.aria-label]="l.favorito ? 'Remover dos favoritos' : 'Favoritar'"
+            </div>
+            <div class="flex items-center gap-3">
+              @if (!agruparPorPessoa() && responsavelPor(l.responsavelId); as resp) {
+                <span
+                  class="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
+                  [style.backgroundColor]="resp.cor + '1a'"
+                  [style.color]="resp.cor"
                 >
-                  <lucide-angular name="star" [size]="15" [class]="l.favorito ? 'text-warning' : ''" />
+                  <span class="h-1.5 w-1.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
+                  {{ resp.nome }}
+                </span>
+              }
+              <app-badge [variant]="l.status === 'pago' ? 'success' : 'warning'">{{ l.status }}</app-badge>
+              <span class="tabular-nums text-sm font-medium" [class]="l.tipo === 'receita' ? 'text-success' : ''">
+                {{ l.tipo === 'receita' ? '+' : '-' }}{{ l.valor | number: '1.2-2' }}
+              </span>
+              @if (l.status !== 'pago') {
+                <button appButton variant="ghost" size="icon" type="button" (click)="marcarPago(l.id)" aria-label="Marcar como pago">
+                  <lucide-angular name="check" [size]="15" />
                 </button>
-                <button appButton variant="ghost" size="icon" type="button" (click)="duplicar(l.id)" aria-label="Duplicar">
-                  <lucide-angular name="copy" [size]="15" />
-                </button>
-                <button appButton variant="ghost" size="icon" type="button" (click)="editar(l)" aria-label="Editar">
-                  <lucide-angular name="pencil" [size]="15" />
-                </button>
-                <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
-                  <lucide-angular name="trash-2" [size]="15" />
-                </button>
-              </div>
-            </app-card>
-          }
-        } @empty {
-          <app-card class="text-sm text-muted-foreground">Nenhum lançamento neste mês.</app-card>
+              }
+              <button
+                appButton
+                variant="ghost"
+                size="icon"
+                type="button"
+                (click)="favoritar(l)"
+                [attr.aria-label]="l.favorito ? 'Remover dos favoritos' : 'Favoritar'"
+              >
+                <lucide-angular name="star" [size]="15" [class]="l.favorito ? 'text-warning' : ''" />
+              </button>
+              <button appButton variant="ghost" size="icon" type="button" (click)="duplicar(l.id)" aria-label="Duplicar">
+                <lucide-angular name="copy" [size]="15" />
+              </button>
+              <button appButton variant="ghost" size="icon" type="button" (click)="editar(l)" aria-label="Editar">
+                <lucide-angular name="pencil" [size]="15" />
+              </button>
+              <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
+                <lucide-angular name="trash-2" [size]="15" />
+              </button>
+            </div>
+          </app-card>
         }
-      </div>
+      </ng-template>
+
+      @if (agruparPorPessoa()) {
+        <div class="flex flex-col gap-4">
+          @for (grupo of gruposPorResponsavel(); track grupo.chave) {
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-wrap items-center justify-between gap-2 rounded-md px-1">
+                <span class="flex items-center gap-2 text-sm font-semibold">
+                  @if (grupo.responsavel; as resp) {
+                    <span class="h-2.5 w-2.5 rounded-full" [style.backgroundColor]="resp.cor"></span>
+                    {{ resp.nome }}
+                  } @else {
+                    <span class="h-2.5 w-2.5 rounded-full bg-muted-foreground/40"></span>
+                    Sem responsável
+                  }
+                  <span class="font-normal text-muted-foreground">({{ grupo.receitas.length + grupo.despesas.length }})</span>
+                </span>
+                <span class="flex items-center gap-3 text-xs">
+                  <span class="text-success">+{{ grupo.totalReceitas | number: '1.2-2' }}</span>
+                  <span class="text-critical">-{{ grupo.totalDespesas | number: '1.2-2' }}</span>
+                  <span class="font-semibold" [class]="grupo.saldo >= 0 ? 'text-success' : 'text-critical'">
+                    = {{ grupo.saldo | number: '1.2-2' }}
+                  </span>
+                </span>
+              </div>
+
+              @if (grupo.receitas.length > 0) {
+                <div class="flex flex-col gap-1.5">
+                  <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-success">Receitas</h3>
+                  @for (l of grupo.receitas; track l.id) {
+                    <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
+                  }
+                </div>
+              }
+
+              @if (grupo.despesas.length > 0) {
+                <div class="flex flex-col gap-1.5">
+                  <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-critical">Despesas</h3>
+                  @for (l of grupo.despesas; track l.id) {
+                    <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
+                  }
+                </div>
+              }
+            </div>
+          } @empty {
+            <app-card class="text-sm text-muted-foreground">Nenhum lançamento neste mês.</app-card>
+          }
+        </div>
+      } @else {
+        <div class="flex flex-col gap-2">
+          @for (l of lancamentosService.lancamentos(); track l.id) {
+            <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
+          } @empty {
+            <app-card class="text-sm text-muted-foreground">Nenhum lançamento neste mês.</app-card>
+          }
+        </div>
+      }
 
       @if (detalhe(); as d) {
         <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[12vh]" (click)="fecharDetalhe()">
@@ -451,8 +516,38 @@ export class LancamentosComponent implements OnInit {
 
   readonly editandoId = signal<string | null>(null);
   readonly detalhe = signal<{ itens: Lancamento[]; recorrenciaId: string | null } | null>(null);
+  readonly agruparPorPessoa = signal(false);
   readonly opcoesParcelas = [2, 3, 4, 6, 10, 12, 18, 24];
   readonly opcoesRecorrencia = [3, 6, 12, 24, 36];
+
+  readonly gruposPorResponsavel = computed(() => {
+    const lista = this.lancamentosService.lancamentos();
+    const criarGrupo = (responsavel: (typeof RESPONSAVEIS_PADRAO)[number] | null, chave: string) => ({
+      chave,
+      responsavel,
+      receitas: [] as Lancamento[],
+      despesas: [] as Lancamento[],
+      totalReceitas: 0,
+      totalDespesas: 0,
+      saldo: 0,
+    });
+    const grupos = this.responsaveis.map((resp) => criarGrupo(resp, resp.id));
+    const semResponsavel = criarGrupo(null, '_sem');
+
+    for (const l of lista) {
+      const grupo = grupos.find((g) => g.chave === l.responsavelId) ?? semResponsavel;
+      if (l.tipo === 'receita') {
+        grupo.receitas.push(l);
+        grupo.totalReceitas += l.valor;
+      } else {
+        grupo.despesas.push(l);
+        grupo.totalDespesas += l.valor;
+      }
+      grupo.saldo = grupo.totalReceitas - grupo.totalDespesas;
+    }
+
+    return [...grupos, semResponsavel].filter((g) => g.receitas.length + g.despesas.length > 0);
+  });
 
   readonly form = this.fb.nonNullable.group(
     {
