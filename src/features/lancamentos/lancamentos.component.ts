@@ -382,6 +382,39 @@ function parseDataLocal(iso: string): Date {
         }
       </ng-template>
 
+      <ng-template #subgrupoNatureza let-sub>
+        @let temMaisDeUmaNatureza = (sub.parcelados.length > 0 ? 1 : 0) + (sub.recorrentes.length > 0 ? 1 : 0) + (sub.avulsos.length > 0 ? 1 : 0) > 1;
+
+        @if (sub.avulsos.length > 0) {
+          @if (temMaisDeUmaNatureza) {
+            <h4 class="px-1 text-[11px] font-medium text-muted-foreground">Avulsas</h4>
+          }
+          @for (l of sub.avulsos; track l.id) {
+            <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
+          }
+        }
+
+        @if (sub.parcelados.length > 0) {
+          <h4 class="flex items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground">
+            <lucide-angular name="layers" [size]="11" />
+            Parceladas
+          </h4>
+          @for (l of sub.parcelados; track l.id) {
+            <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
+          }
+        }
+
+        @if (sub.recorrentes.length > 0) {
+          <h4 class="flex items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground">
+            <lucide-angular name="repeat" [size]="11" />
+            Recorrentes
+          </h4>
+          @for (l of sub.recorrentes; track l.id) {
+            <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
+          }
+        }
+      </ng-template>
+
       @if (agruparPorPessoa()) {
         <div class="flex flex-col gap-4">
           @for (grupo of gruposPorResponsavel(); track grupo.chave) {
@@ -395,7 +428,7 @@ function parseDataLocal(iso: string): Date {
                     <span class="h-2.5 w-2.5 rounded-full bg-muted-foreground/40"></span>
                     Sem responsável
                   }
-                  <span class="font-normal text-muted-foreground">({{ grupo.receitas.length + grupo.despesas.length }})</span>
+                  <span class="font-normal text-muted-foreground">({{ totalSubgrupo(grupo.receitas) + totalSubgrupo(grupo.despesas) }})</span>
                 </span>
                 <span class="flex items-center gap-3 text-xs">
                   <span class="text-success">+{{ grupo.totalReceitas | number: '1.2-2' }}</span>
@@ -406,21 +439,17 @@ function parseDataLocal(iso: string): Date {
                 </span>
               </div>
 
-              @if (grupo.receitas.length > 0) {
-                <div class="flex flex-col gap-1.5">
+              @if (totalSubgrupo(grupo.receitas) > 0) {
+                <div class="flex flex-col gap-2.5">
                   <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-success">Receitas</h3>
-                  @for (l of grupo.receitas; track l.id) {
-                    <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
-                  }
+                  <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.receitas }" />
                 </div>
               }
 
-              @if (grupo.despesas.length > 0) {
-                <div class="flex flex-col gap-1.5">
+              @if (totalSubgrupo(grupo.despesas) > 0) {
+                <div class="flex flex-col gap-2.5">
                   <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-critical">Despesas</h3>
-                  @for (l of grupo.despesas; track l.id) {
-                    <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
-                  }
+                  <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.despesas }" />
                 </div>
               }
             </div>
@@ -522,11 +551,12 @@ export class LancamentosComponent implements OnInit {
 
   readonly gruposPorResponsavel = computed(() => {
     const lista = this.lancamentosService.lancamentos();
+    const criarSubgrupo = () => ({ avulsos: [] as Lancamento[], parcelados: [] as Lancamento[], recorrentes: [] as Lancamento[] });
     const criarGrupo = (responsavel: (typeof RESPONSAVEIS_PADRAO)[number] | null, chave: string) => ({
       chave,
       responsavel,
-      receitas: [] as Lancamento[],
-      despesas: [] as Lancamento[],
+      receitas: criarSubgrupo(),
+      despesas: criarSubgrupo(),
       totalReceitas: 0,
       totalDespesas: 0,
       saldo: 0,
@@ -536,17 +566,19 @@ export class LancamentosComponent implements OnInit {
 
     for (const l of lista) {
       const grupo = grupos.find((g) => g.chave === l.responsavelId) ?? semResponsavel;
-      if (l.tipo === 'receita') {
-        grupo.receitas.push(l);
-        grupo.totalReceitas += l.valor;
-      } else {
-        grupo.despesas.push(l);
-        grupo.totalDespesas += l.valor;
-      }
+      const subgrupo = l.tipo === 'receita' ? grupo.receitas : grupo.despesas;
+      const natureza = l.recorrenciaId ? subgrupo.recorrentes : l.grupoParcelamentoId ? subgrupo.parcelados : subgrupo.avulsos;
+      natureza.push(l);
+      if (l.tipo === 'receita') grupo.totalReceitas += l.valor;
+      else grupo.totalDespesas += l.valor;
       grupo.saldo = grupo.totalReceitas - grupo.totalDespesas;
     }
 
-    return [...grupos, semResponsavel].filter((g) => g.receitas.length + g.despesas.length > 0);
+    return [...grupos, semResponsavel].filter(
+      (g) =>
+        g.receitas.avulsos.length + g.receitas.parcelados.length + g.receitas.recorrentes.length +
+        g.despesas.avulsos.length + g.despesas.parcelados.length + g.despesas.recorrentes.length > 0,
+    );
   });
 
   readonly form = this.fb.nonNullable.group(
@@ -609,6 +641,10 @@ export class LancamentosComponent implements OnInit {
 
   responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {
     return id ? this.responsaveis.find((r) => r.id === id) : undefined;
+  }
+
+  totalSubgrupo(sub: { avulsos: Lancamento[]; parcelados: Lancamento[]; recorrentes: Lancamento[] }): number {
+    return sub.avulsos.length + sub.parcelados.length + sub.recorrentes.length;
   }
 
   formatarData(iso: string): string {
