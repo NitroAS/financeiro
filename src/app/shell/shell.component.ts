@@ -11,12 +11,13 @@ import { CommandPaletteComponent } from '../../features/busca/command-palette.co
 import { BackupService } from '../../core/db/backup.service';
 import { ImportarPlanilhaComponent } from '../../features/importacao/importar-planilha.component';
 import { AuthService } from '../../core/auth/auth.service';
+import { ButtonDirective } from '../../shared/ui/button.directive';
 import { NAV_ITEMS } from './nav-items';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule, CommandPaletteComponent, ImportarPlanilhaComponent],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, LucideAngularModule, CommandPaletteComponent, ImportarPlanilhaComponent, ButtonDirective],
   template: `
     <div class="flex h-screen overflow-hidden bg-background text-foreground">
       @if (menuAberto()) {
@@ -107,12 +108,13 @@ import { NAV_ITEMS } from './nav-items';
 
             <button
               type="button"
-              (click)="backupService.exportar()"
-              aria-label="Baixar backup"
-              title="Baixar backup"
-              class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              (click)="exportarBackup()"
+              [disabled]="exportando()"
+              aria-label="Baixar backup com todos os dados (arquivo .json)"
+              title="Baixar backup com todos os dados (arquivo .json)"
+              class="flex h-8 w-8 flex-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
-              <lucide-angular name="download" [size]="16" />
+              <lucide-angular name="download" [size]="16" [class]="exportando() ? 'animate-pulse' : ''" />
             </button>
 
             <button
@@ -159,6 +161,36 @@ import { NAV_ITEMS } from './nav-items';
       </div>
 
       <app-command-palette />
+
+      @if (backupResultado(); as r) {
+        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[12vh]" (click)="backupResultado.set(null)">
+          <div class="w-full max-w-sm rounded-lg border border-border bg-card p-5 shadow-lg" (click)="$event.stopPropagation()">
+            <div class="flex items-center gap-2 text-success">
+              <lucide-angular name="check" [size]="18" />
+              <h2 class="text-sm font-semibold">Backup baixado</h2>
+            </div>
+            <p class="mt-2 text-sm text-muted-foreground">
+              Arquivo <span class="font-medium text-foreground">{{ r.nomeArquivo }}</span> baixado com
+              {{ r.totalLinhas }} registros ao todo. Guarde-o num lugar seguro (ex.: um drive na nuvem) —
+              é ele que dá pra usar em "Restaurar backup" se precisar.
+            </p>
+            <button appButton class="mt-4 w-full" type="button" (click)="backupResultado.set(null)">Fechar</button>
+          </div>
+        </div>
+      }
+
+      @if (backupErro(); as e) {
+        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-[12vh]" (click)="backupErro.set(null)">
+          <div class="w-full max-w-sm rounded-lg border border-border bg-card p-5 shadow-lg" (click)="$event.stopPropagation()">
+            <div class="flex items-center gap-2 text-critical">
+              <lucide-angular name="x" [size]="18" />
+              <h2 class="text-sm font-semibold">Não deu certo</h2>
+            </div>
+            <p class="mt-2 text-sm text-muted-foreground">{{ e }}</p>
+            <button appButton class="mt-4 w-full" type="button" (click)="backupErro.set(null)">Fechar</button>
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -171,10 +203,25 @@ export class ShellComponent {
   readonly auth = inject(AuthService);
   readonly navItems = NAV_ITEMS;
   readonly menuAberto = signal(false);
+  readonly exportando = signal(false);
+  readonly backupResultado = signal<{ nomeArquivo: string; totalLinhas: number } | null>(null);
+  readonly backupErro = signal<string | null>(null);
 
   constructor() {
     const router = inject(Router);
     router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe(() => this.menuAberto.set(false));
+  }
+
+  async exportarBackup(): Promise<void> {
+    this.exportando.set(true);
+    try {
+      const resultado = await this.backupService.exportar();
+      this.backupResultado.set(resultado);
+    } catch {
+      this.backupErro.set('Não foi possível gerar o backup agora. Verifique sua conexão e tente de novo.');
+    } finally {
+      this.exportando.set(false);
+    }
   }
 
   async restaurar(event: Event): Promise<void> {
@@ -182,8 +229,12 @@ export class ShellComponent {
     const arquivo = input.files?.[0];
     if (!arquivo) return;
     if (confirm('Restaurar este backup vai substituir todos os dados atuais. Continuar?')) {
-      await this.backupService.restaurar(arquivo);
-      window.location.reload();
+      try {
+        await this.backupService.restaurar(arquivo);
+        window.location.reload();
+      } catch (erro) {
+        this.backupErro.set(erro instanceof Error ? erro.message : 'Não foi possível restaurar este backup.');
+      }
     }
     input.value = '';
   }
