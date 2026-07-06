@@ -91,7 +91,7 @@ const TIPOS = ['CDB', 'Tesouro', 'ETF', 'Acao', 'Fundo', 'Cripto'] as const;
               <button appButton variant="ghost" size="icon" type="button" (click)="editar(i)" aria-label="Editar">
                 <lucide-angular name="pencil" [size]="15" />
               </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="remover(i.id)" aria-label="Remover">
+              <button appButton variant="ghost" size="icon" type="button" (click)="remover(i.id)" [disabled]="removendoIds().has(i.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
             </div>
@@ -175,7 +175,17 @@ export class InvestimentosComponent implements OnInit {
     if (input) input.value = '';
   }
 
+  readonly removendoIds = signal<ReadonlySet<string>>(new Set());
+
   async remover(id: string): Promise<void> {
-    await this.investimentosService.remover(id);
+    if (this.removendoIds().has(id)) return;
+    this.removendoIds.set(new Set([...this.removendoIds(), id]));
+    try {
+      await this.investimentosService.remover(id);
+    } finally {
+      const restante = new Set(this.removendoIds());
+      restante.delete(id);
+      this.removendoIds.set(restante);
+    }
   }
 }

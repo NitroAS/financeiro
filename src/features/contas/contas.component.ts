@@ -146,6 +146,7 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0', '#E05A5A']
                 size="icon"
                 type="button"
                 (click)="remover(c.id)"
+                [disabled]="removendoIds().has(c.id)"
                 aria-label="Arquivar conta"
               >
                 <lucide-angular name="trash-2" [size]="16" />
@@ -249,8 +250,18 @@ export class ContasComponent implements OnInit {
     });
   }
 
+  readonly removendoIds = signal<ReadonlySet<string>>(new Set());
+
   async remover(id: string): Promise<void> {
-    await this.contasService.remover(id);
+    if (this.removendoIds().has(id)) return;
+    this.removendoIds.set(new Set([...this.removendoIds(), id]));
+    try {
+      await this.contasService.remover(id);
+    } finally {
+      const restante = new Set(this.removendoIds());
+      restante.delete(id);
+      this.removendoIds.set(restante);
+    }
   }
 
   responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {

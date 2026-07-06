@@ -72,7 +72,7 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
               <button appButton variant="ghost" size="icon" type="button" (click)="editar(m)" aria-label="Editar">
                 <lucide-angular name="pencil" [size]="15" />
               </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="remover(m.id)" aria-label="Remover">
+              <button appButton variant="ghost" size="icon" type="button" (click)="remover(m.id)" [disabled]="removendoIds().has(m.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
             </div>
@@ -170,7 +170,17 @@ export class MetasComponent implements OnInit {
     if (input) input.value = '';
   }
 
+  readonly removendoIds = signal<ReadonlySet<string>>(new Set());
+
   async remover(id: string): Promise<void> {
-    await this.metasService.remover(id);
+    if (this.removendoIds().has(id)) return;
+    this.removendoIds.set(new Set([...this.removendoIds(), id]));
+    try {
+      await this.metasService.remover(id);
+    } finally {
+      const restante = new Set(this.removendoIds());
+      restante.delete(id);
+      this.removendoIds.set(restante);
+    }
   }
 }

@@ -126,7 +126,7 @@ const CORES = ['#6C4CE0', '#2AA9A0', '#E0A03C', '#E05A97', '#3C9FE0'];
               <button appButton variant="ghost" size="icon" type="button" (click)="editar(c)" aria-label="Editar cartão">
                 <lucide-angular name="pencil" [size]="15" />
               </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="remover(c.id)" aria-label="Remover">
+              <button appButton variant="ghost" size="icon" type="button" (click)="remover(c.id)" [disabled]="removendoIds().has(c.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
             </div>
@@ -295,8 +295,18 @@ export class CartoesComponent implements OnInit {
     });
   }
 
+  readonly removendoIds = signal<ReadonlySet<string>>(new Set());
+
   async remover(id: string): Promise<void> {
-    await this.cartoesService.remover(id);
+    if (this.removendoIds().has(id)) return;
+    this.removendoIds.set(new Set([...this.removendoIds(), id]));
+    try {
+      await this.cartoesService.remover(id);
+    } finally {
+      const restante = new Set(this.removendoIds());
+      restante.delete(id);
+      this.removendoIds.set(restante);
+    }
   }
 
   responsavelPor(id: string | null): (typeof RESPONSAVEIS_PADRAO)[number] | undefined {

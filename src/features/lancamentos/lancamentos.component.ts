@@ -120,7 +120,15 @@ function parseDataLocal(iso: string): Date {
                   <button appButton variant="ghost" size="icon" type="button" (click)="restaurar(l.id)" aria-label="Restaurar">
                     <lucide-angular name="rotate-ccw" [size]="14" />
                   </button>
-                  <button appButton variant="ghost" size="icon" type="button" (click)="excluirDefinitivamente(l.id)" aria-label="Excluir definitivamente">
+                  <button
+                    appButton
+                    variant="ghost"
+                    size="icon"
+                    type="button"
+                    (click)="excluirDefinitivamente(l.id)"
+                    [disabled]="removendoIds().has(l.id)"
+                    aria-label="Excluir definitivamente"
+                  >
                     <lucide-angular name="x" [size]="14" />
                   </button>
                 </div>
@@ -391,7 +399,7 @@ function parseDataLocal(iso: string): Date {
               <button appButton variant="ghost" size="icon" type="button" (click)="editar(l)" aria-label="Editar">
                 <lucide-angular name="pencil" [size]="15" />
               </button>
-              <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" aria-label="Remover">
+              <button appButton variant="ghost" size="icon" type="button" (click)="remover(l.id)" [disabled]="removendoIds().has(l.id)" aria-label="Remover">
                 <lucide-angular name="trash-2" [size]="15" />
               </button>
             </div>
@@ -415,6 +423,7 @@ function parseDataLocal(iso: string): Date {
           <h4 class="flex items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground">
             <lucide-angular name="layers" [size]="11" />
             Parceladas
+            <span class="font-normal">({{ somaValores(sub.parcelados) | number: '1.2-2' }})</span>
           </h4>
           @for (l of sub.parcelados; track l.id) {
             <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
@@ -425,6 +434,7 @@ function parseDataLocal(iso: string): Date {
           <h4 class="flex items-center gap-1 px-1 text-[11px] font-medium text-muted-foreground">
             <lucide-angular name="repeat" [size]="11" />
             Recorrentes
+            <span class="font-normal">({{ somaValores(sub.recorrentes) | number: '1.2-2' }})</span>
           </h4>
           @for (l of sub.recorrentes; track l.id) {
             <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
@@ -464,14 +474,18 @@ function parseDataLocal(iso: string): Date {
               @if (!estaColapsado(grupo.chave)) {
                 @if (totalSubgrupo(grupo.receitas) > 0) {
                   <div class="flex flex-col gap-2.5">
-                    <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-success">Receitas</h3>
+                    <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-success">
+                      Receitas <span class="font-normal normal-case text-muted-foreground">({{ grupo.totalReceitas | number: '1.2-2' }})</span>
+                    </h3>
                     <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.receitas }" />
                   </div>
                 }
 
                 @if (totalSubgrupo(grupo.despesas) > 0) {
                   <div class="flex flex-col gap-2.5">
-                    <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-critical">Despesas</h3>
+                    <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-critical">
+                      Despesas <span class="font-normal normal-case text-muted-foreground">({{ grupo.totalDespesas | number: '1.2-2' }})</span>
+                    </h3>
                     <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.despesas }" />
                   </div>
                 }
@@ -482,6 +496,15 @@ function parseDataLocal(iso: string): Date {
           }
         </div>
       } @else {
+        @if (lancamentosService.lancamentos().length > 0) {
+          <div class="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2 text-xs">
+            <span class="text-success">Receitas: +{{ totaisSimples().totalReceitas | number: '1.2-2' }}</span>
+            <span class="text-critical">Despesas: -{{ totaisSimples().totalDespesas | number: '1.2-2' }}</span>
+            <span class="font-semibold" [class]="totaisSimples().saldo >= 0 ? 'text-success' : 'text-critical'">
+              Saldo: {{ totaisSimples().saldo | number: '1.2-2' }}
+            </span>
+          </div>
+        }
         <div class="flex flex-col gap-2">
           @for (l of lancamentosService.lancamentos(); track l.id) {
             <ng-container *ngTemplateOutlet="linhaLancamento; context: { $implicit: l }" />
@@ -631,6 +654,12 @@ export class LancamentosComponent implements OnInit {
     return [];
   });
 
+  readonly totaisSimples = computed(() => {
+    const totalReceitas = this.somaValores(this.lancamentosService.lancamentos().filter((l) => l.tipo === 'receita'));
+    const totalDespesas = this.somaValores(this.lancamentosService.lancamentos().filter((l) => l.tipo === 'despesa'));
+    return { totalReceitas, totalDespesas, saldo: totalReceitas - totalDespesas };
+  });
+
   readonly form = this.fb.nonNullable.group(
     {
       tipo: ['despesa' as 'receita' | 'despesa', Validators.required],
@@ -699,6 +728,10 @@ export class LancamentosComponent implements OnInit {
 
   totalSubgrupo(sub: { avulsos: Lancamento[]; parcelados: Lancamento[]; recorrentes: Lancamento[] }): number {
     return sub.avulsos.length + sub.parcelados.length + sub.recorrentes.length;
+  }
+
+  somaValores(lista: Lancamento[]): number {
+    return lista.reduce((soma, l) => soma + l.valor, 0);
   }
 
   /** Recolhe/expande a seção de uma pessoa ou cartão na visão agrupada, pra dar pra bater o
@@ -869,8 +902,22 @@ export class LancamentosComponent implements OnInit {
     await this.lancamentosService.marcarPago(id);
   }
 
+  readonly removendoIds = signal<ReadonlySet<string>>(new Set());
+
+  private async executarComGuarda(id: string, acao: () => Promise<void>): Promise<void> {
+    if (this.removendoIds().has(id)) return;
+    this.removendoIds.set(new Set([...this.removendoIds(), id]));
+    try {
+      await acao();
+    } finally {
+      const restante = new Set(this.removendoIds());
+      restante.delete(id);
+      this.removendoIds.set(restante);
+    }
+  }
+
   async remover(id: string): Promise<void> {
-    await this.lancamentosService.remover(id);
+    await this.executarComGuarda(id, () => this.lancamentosService.remover(id));
   }
 
   async favoritar(l: Lancamento): Promise<void> {
@@ -894,7 +941,7 @@ export class LancamentosComponent implements OnInit {
 
   async excluirDefinitivamente(id: string): Promise<void> {
     if (confirm('Excluir definitivamente? Essa ação não pode ser desfeita.')) {
-      await this.lancamentosService.excluirDefinitivamente(id);
+      await this.executarComGuarda(id, () => this.lancamentosService.excluirDefinitivamente(id));
     }
   }
 }
