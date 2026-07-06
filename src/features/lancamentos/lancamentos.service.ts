@@ -46,6 +46,10 @@ export interface EdicaoLancamentoInput {
   cartaoId?: string;
   responsavelId?: string;
   observacao?: string;
+  /** Se ausente, mantém o vínculo de grupo (parcelamento/recorrência) que o lançamento já tinha. */
+  repeticao?: 'nenhuma' | 'parcelado' | 'recorrente';
+  quantidade?: number;
+  parcelaInicial?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -182,26 +186,129 @@ export class LancamentosService {
     await this.carregar();
   }
 
+  /** Edita um lançamento. Além dos campos comuns, permite trocar entre compra única,
+   * parcelado e recorrente (`input.repeticao`):
+   * - Se `repeticao` for omitido ou igual ao que o lançamento já tinha, é uma edição normal
+   *   (o vínculo de grupo existente, se houver, é preservado como está).
+   * - Se virar 'nenhuma', desvincula só este lançamento do grupo — o resto das
+   *   parcelas/ocorrências continua intacto.
+   * - Se virar 'parcelado'/'recorrente', este lançamento passa a ser o início de um novo
+   *   grupo (novo grupoParcelamentoId/recorrenciaId), e as ocorrências seguintes são geradas
+   *   a partir da data informada — o vínculo antigo (se havia um) é substituído pelo novo.
+   */
   async atualizar(id: string, input: EdicaoLancamentoInput): Promise<void> {
     const atual = this.lancamentos().find((l) => l.id === id);
     const jaEraPago = atual?.status === 'pago';
-    await this.dbService.db
-      .update(lancamento)
-      .set({
-        tipo: input.tipo,
+    const repeticaoAtual: 'nenhuma' | 'parcelado' | 'recorrente' = atual?.recorrenciaId
+      ? 'recorrente'
+      : atual?.grupoParcelamentoId
+        ? 'parcelado'
+        : 'nenhuma';
+    const repeticaoDesejada = input.repeticao ?? repeticaoAtual;
+
+    const camposComuns = {
+      tipo: input.tipo,
+      descricao: input.descricao,
+      valor: input.valor,
+      status: input.status,
+      dataPagamento: input.status === 'pago' ? (jaEraPago ? atual?.dataPagamento : new Date().toISOString()) : null,
+      categoriaId: input.categoriaId || null,
+      contaId: input.contaId || null,
+      cartaoId: input.cartaoId || null,
+      responsavelId: input.responsavelId || null,
+      observacao: input.observacao || null,
+    };
+
+    if (repeticaoDesejada === repeticaoAtual) {
+      await this.dbService.db
+        .update(lancamento)
+        .set({ ...camposComuns, data: input.data.toISOString(), vencimento: input.data.toISOString() })
+        .where(eq(lancamento.id, id));
+    } else if (repeticaoDesejada === 'nenhuma') {
+      await this.dbService.db
+        .update(lancamento)
+        .set({
+          ...camposComuns,
+          data: input.data.toISOString(),
+          vencimento: input.data.toISOString(),
+          grupoParcelamentoId: null,
+          parcelaAtual: null,
+          parcelaTotal: null,
+          recorrenciaId: null,
+        })
+        .where(eq(lancamento.id, id));
+    } else if (repeticaoDesejada === 'parcelado') {
+      const parcelas = gerarParcelas({
         descricao: input.descricao,
-        valor: input.valor,
-        data: input.data.toISOString(),
-        vencimento: input.data.toISOString(),
-        status: input.status,
-        dataPagamento: input.status === 'pago' ? (jaEraPago ? atual?.dataPagamento : new Date().toISOString()) : null,
-        categoriaId: input.categoriaId || null,
-        contaId: input.contaId || null,
-        cartaoId: input.cartaoId || null,
-        responsavelId: input.responsavelId || null,
-        observacao: input.observacao || null,
-      })
-      .where(eq(lancamento.id, id));
+        valorParcela: input.valor,
+        totalParcelas: input.quantidade ?? 2,
+        parcelaInicial: input.parcelaInicial,
+        dataPrimeiraParcela: input.data,
+        contaId: input.contaId || undefined,
+        cartaoId: input.cartaoId || undefined,
+        categoriaId: input.categoriaId || undefined,
+        responsavelId: input.responsavelId || undefined,
+      });
+      const [primeira, ...resto] = parcelas;
+      await this.dbService.db
+        .update(lancamento)
+        .set({
+          ...camposComuns,
+          data: primeira.data,
+          vencimento: primeira.vencimento,
+          grupoParcelamentoId: primeira.grupoParcelamentoId,
+          parcelaAtual: primeira.parcelaAtual,
+          parcelaTotal: primeira.parcelaTotal,
+          recorrenciaId: null,
+        })
+        .where(eq(lancamento.id, id));
+      if (resto.length) await this.dbService.db.insert(lancamento).values(resto.map((p) => ({ ...p, tipo: input.tipo })));
+    } else {
+      const recorrenciaId = crypto.randomUUID();
+      await this.dbService.db.insert(recorrencia).values({
+        id: recorrenciaId,
+        frequencia: 'mensal',
+        diaReferencia: input.data.getDate(),
+        ativa: true,
+      });
+      const meses = Math.max(1, input.quantidade ?? 3);
+      const ocorrencias = Array.from({ length: meses }, (_, index) => {
+        const data = addMonthsClamped(input.data, index).toISOString();
+        return { data, vencimento: data };
+      });
+      const [primeira, ...resto] = ocorrencias;
+      await this.dbService.db
+        .update(lancamento)
+        .set({
+          ...camposComuns,
+          data: primeira.data,
+          vencimento: primeira.vencimento,
+          recorrenciaId,
+          grupoParcelamentoId: null,
+          parcelaAtual: null,
+          parcelaTotal: null,
+        })
+        .where(eq(lancamento.id, id));
+      if (resto.length) {
+        await this.dbService.db.insert(lancamento).values(
+          resto.map((o) => ({
+            tipo: input.tipo,
+            descricao: input.descricao,
+            valor: input.valor,
+            status: 'pendente' as const,
+            contaId: input.contaId || undefined,
+            cartaoId: input.cartaoId || undefined,
+            categoriaId: input.categoriaId || undefined,
+            responsavelId: input.responsavelId || undefined,
+            observacao: input.observacao || undefined,
+            recorrenciaId,
+            data: o.data,
+            vencimento: o.vencimento,
+          })),
+        );
+      }
+    }
+
     await this.carregar();
   }
 

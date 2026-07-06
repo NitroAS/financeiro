@@ -210,57 +210,64 @@ function parseDataLocal(iso: string): Date {
           </div>
 
           <div class="flex flex-wrap items-end gap-3">
-            @if (!editandoId()) {
+            <div class="flex flex-col gap-1">
+              <label class="text-xs font-medium text-muted-foreground">Repetição</label>
+              <select appSelect formControlName="repeticao">
+                <option value="nenhuma">Compra única</option>
+                <option value="parcelado">Parcelado</option>
+                <option value="recorrente">Recorrente (mensal)</option>
+              </select>
+            </div>
+            @if (editandoId() && form.value.repeticao !== repeticaoOriginalEdicao()) {
+              <p class="w-full text-xs text-warning">
+                @if (form.value.repeticao === 'nenhuma') {
+                  Isso desvincula só este lançamento do grupo — o restante das parcelas/ocorrências continua como está.
+                } @else {
+                  Isso transforma este lançamento no início de um novo {{ form.value.repeticao === 'parcelado' ? 'parcelamento' : 'plano recorrente' }}, gerando as próximas ocorrências a partir da data acima.
+                }
+              </p>
+            }
+            @if (form.value.repeticao === 'parcelado' && mostrarQuantidade()) {
               <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium text-muted-foreground">Repetição</label>
-                <select appSelect formControlName="repeticao">
-                  <option value="nenhuma">Não repete</option>
-                  <option value="parcelado">Parcelado</option>
-                  <option value="recorrente">Recorrente (mensal)</option>
-                </select>
+                <label class="text-xs font-medium text-muted-foreground">Total de parcelas</label>
+                <div class="flex flex-wrap items-center gap-1">
+                  <input appInput type="number" min="2" class="w-20" formControlName="quantidade" />
+                  @for (n of opcoesParcelas; track n) {
+                    <button
+                      type="button"
+                      class="rounded-md border border-border px-2 py-1 text-xs"
+                      [class]="form.value.quantidade === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'"
+                      (click)="form.patchValue({ quantidade: n })"
+                    >
+                      {{ n }}x
+                    </button>
+                  }
+                </div>
               </div>
-              @if (form.value.repeticao === 'parcelado') {
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs font-medium text-muted-foreground">Total de parcelas</label>
-                  <div class="flex flex-wrap items-center gap-1">
-                    <input appInput type="number" min="2" class="w-20" formControlName="quantidade" />
-                    @for (n of opcoesParcelas; track n) {
-                      <button
-                        type="button"
-                        class="rounded-md border border-border px-2 py-1 text-xs"
-                        [class]="form.value.quantidade === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'"
-                        (click)="form.patchValue({ quantidade: n })"
-                      >
-                        {{ n }}x
-                      </button>
-                    }
-                  </div>
+              <div class="flex w-40 flex-col gap-1">
+                <label class="text-xs font-medium text-muted-foreground" title="Se a compra já está em andamento (ex.: 3/12), coloque aqui a parcela atual em vez de começar do 1">
+                  Começar a partir da parcela
+                </label>
+                <input appInput type="number" min="1" [attr.max]="form.value.quantidade" formControlName="parcelaInicial" />
+              </div>
+            }
+            @if (form.value.repeticao === 'recorrente' && mostrarQuantidade()) {
+              <div class="flex flex-col gap-1">
+                <label class="text-xs font-medium text-muted-foreground">Repetir por (meses)</label>
+                <div class="flex flex-wrap items-center gap-1">
+                  <input appInput type="number" min="2" class="w-20" formControlName="quantidade" />
+                  @for (n of opcoesRecorrencia; track n) {
+                    <button
+                      type="button"
+                      class="rounded-md border border-border px-2 py-1 text-xs"
+                      [class]="form.value.quantidade === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'"
+                      (click)="form.patchValue({ quantidade: n })"
+                    >
+                      {{ n }}
+                    </button>
+                  }
                 </div>
-                <div class="flex w-40 flex-col gap-1">
-                  <label class="text-xs font-medium text-muted-foreground" title="Se a compra já está em andamento (ex.: 3/12), coloque aqui a parcela atual em vez de começar do 1">
-                    Começar a partir da parcela
-                  </label>
-                  <input appInput type="number" min="1" [attr.max]="form.value.quantidade" formControlName="parcelaInicial" />
-                </div>
-              }
-              @if (form.value.repeticao === 'recorrente') {
-                <div class="flex flex-col gap-1">
-                  <label class="text-xs font-medium text-muted-foreground">Repetir por (meses)</label>
-                  <div class="flex flex-wrap items-center gap-1">
-                    <input appInput type="number" min="2" class="w-20" formControlName="quantidade" />
-                    @for (n of opcoesRecorrencia; track n) {
-                      <button
-                        type="button"
-                        class="rounded-md border border-border px-2 py-1 text-xs"
-                        [class]="form.value.quantidade === n ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-muted'"
-                        (click)="form.patchValue({ quantidade: n })"
-                      >
-                        {{ n }}
-                      </button>
-                    }
-                  </div>
-                </div>
-              }
+              </div>
             }
 
             <div class="flex min-w-[200px] flex-1 flex-col gap-1">
@@ -429,8 +436,15 @@ function parseDataLocal(iso: string): Date {
         <div class="flex flex-col gap-4">
           @for (grupo of gruposParaExibir(); track grupo.chave) {
             <div class="flex flex-col gap-2">
-              <div class="flex flex-wrap items-center justify-between gap-2 rounded-md px-1">
+              <button
+                type="button"
+                class="flex flex-wrap items-center justify-between gap-2 rounded-md px-1 text-left hover:bg-muted"
+                (click)="alternarColapso(grupo.chave)"
+                [attr.aria-expanded]="!estaColapsado(grupo.chave)"
+                [attr.aria-label]="(estaColapsado(grupo.chave) ? 'Expandir' : 'Recolher') + ' ' + grupo.titulo"
+              >
                 <span class="flex items-center gap-2 text-sm font-semibold">
+                  <lucide-angular [name]="estaColapsado(grupo.chave) ? 'chevron-right' : 'chevron-down'" [size]="14" class="text-muted-foreground" />
                   <span class="h-2.5 w-2.5 rounded-full" [style.backgroundColor]="grupo.cor"></span>
                   {{ grupo.titulo }}
                   @if (grupo.subtitulo) {
@@ -445,20 +459,22 @@ function parseDataLocal(iso: string): Date {
                     = {{ grupo.saldo | number: '1.2-2' }}
                   </span>
                 </span>
-              </div>
+              </button>
 
-              @if (totalSubgrupo(grupo.receitas) > 0) {
-                <div class="flex flex-col gap-2.5">
-                  <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-success">Receitas</h3>
-                  <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.receitas }" />
-                </div>
-              }
+              @if (!estaColapsado(grupo.chave)) {
+                @if (totalSubgrupo(grupo.receitas) > 0) {
+                  <div class="flex flex-col gap-2.5">
+                    <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-success">Receitas</h3>
+                    <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.receitas }" />
+                  </div>
+                }
 
-              @if (totalSubgrupo(grupo.despesas) > 0) {
-                <div class="flex flex-col gap-2.5">
-                  <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-critical">Despesas</h3>
-                  <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.despesas }" />
-                </div>
+                @if (totalSubgrupo(grupo.despesas) > 0) {
+                  <div class="flex flex-col gap-2.5">
+                    <h3 class="px-1 text-xs font-semibold uppercase tracking-wide text-critical">Despesas</h3>
+                    <ng-container *ngTemplateOutlet="subgrupoNatureza; context: { $implicit: grupo.despesas }" />
+                  </div>
+                }
               }
             </div>
           } @empty {
@@ -552,8 +568,10 @@ export class LancamentosComponent implements OnInit {
   });
 
   readonly editandoId = signal<string | null>(null);
+  readonly repeticaoOriginalEdicao = signal<'nenhuma' | 'parcelado' | 'recorrente'>('nenhuma');
   readonly detalhe = signal<{ itens: Lancamento[]; recorrenciaId: string | null } | null>(null);
   readonly modoAgrupamento = signal<'nenhuma' | 'pessoa' | 'cartao'>('nenhuma');
+  readonly gruposColapsados = signal<ReadonlySet<string>>(new Set());
   readonly opcoesParcelas = [2, 3, 4, 6, 10, 12, 18, 24];
   readonly opcoesRecorrencia = [3, 6, 12, 24, 36];
 
@@ -682,6 +700,19 @@ export class LancamentosComponent implements OnInit {
     return sub.avulsos.length + sub.parcelados.length + sub.recorrentes.length;
   }
 
+  /** Recolhe/expande a seção de uma pessoa ou cartão na visão agrupada, pra dar pra bater o
+   * olho rápido em todo mundo sem precisar rolar por cada lançamento de cada um. */
+  alternarColapso(chave: string): void {
+    const atual = new Set(this.gruposColapsados());
+    if (atual.has(chave)) atual.delete(chave);
+    else atual.add(chave);
+    this.gruposColapsados.set(atual);
+  }
+
+  estaColapsado(chave: string): boolean {
+    return this.gruposColapsados().has(chave);
+  }
+
   formatarData(iso: string): string {
     return parseDataLocal(iso.slice(0, 10)).toLocaleDateString('pt-BR');
   }
@@ -703,6 +734,9 @@ export class LancamentosComponent implements OnInit {
         cartaoId: v.cartaoId || undefined,
         responsavelId: v.responsavelId || undefined,
         observacao: v.observacao || undefined,
+        repeticao: v.repeticao,
+        quantidade: v.quantidade,
+        parcelaInicial: v.parcelaInicial,
       });
       this.cancelarEdicao();
       return;
@@ -742,6 +776,12 @@ export class LancamentosComponent implements OnInit {
 
   editar(l: Lancamento): void {
     this.editandoId.set(l.id);
+    const repeticaoAtual: 'nenhuma' | 'parcelado' | 'recorrente' = l.recorrenciaId
+      ? 'recorrente'
+      : l.grupoParcelamentoId
+        ? 'parcelado'
+        : 'nenhuma';
+    this.repeticaoOriginalEdicao.set(repeticaoAtual);
     this.form.patchValue({
       tipo: l.tipo,
       descricao: l.descricao,
@@ -753,12 +793,22 @@ export class LancamentosComponent implements OnInit {
       cartaoId: l.cartaoId ?? '',
       responsavelId: l.responsavelId ?? '',
       observacao: l.observacao ?? '',
-      repeticao: 'nenhuma',
+      repeticao: repeticaoAtual,
+      quantidade: l.parcelaTotal ?? 2,
+      parcelaInicial: l.parcelaAtual ?? 1,
     });
+  }
+
+  /** Enquanto edita, só mostra os campos de quantidade quando o usuário realmente muda a
+   * repetição em relação ao que o lançamento já tinha — trocar a quantidade sem mudar o
+   * modo não altera o grupo inteiro (ver LancamentosService.atualizar). */
+  mostrarQuantidade(): boolean {
+    return !this.editandoId() || this.form.value.repeticao !== this.repeticaoOriginalEdicao();
   }
 
   cancelarEdicao(): void {
     this.editandoId.set(null);
+    this.repeticaoOriginalEdicao.set('nenhuma');
     this.form.reset({
       tipo: 'despesa',
       descricao: '',
